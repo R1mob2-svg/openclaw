@@ -1,0 +1,27 @@
+name: Command Receipt
+
+on:
+  repository_dispatch:
+    types: [command_receipt]
+
+jobs:
+  post-receipt:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Post Receipt Comment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const payload = context.payload.client_payload;
+            const issueNumber = payload.github_issue_number;
+            const receipt = payload.receipt || "No receipt provided.";
+            const formattedReceipt = "```json\n" + JSON.stringify(receipt, null, 2) + "\n```";
+            
+            github.rest.issues.createComment({
+              issue_number: issueNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: "### Command Execution Receipt\n" + formattedReceipt
+            });

@@ -1,0 +1,29 @@
+{
+  "command_id": "CMD-1781465922291-321",
+  "created_at": "2026-06-14T19:38:42.291Z",
+  "created_by": "Newton/ChatGPT",
+  "source_channel": "Telegram Phone Lane",
+  "target_agent": "AG the Sentinel",
+  "title": "PING_AG_FROM_NEWTON_DRY_RUN",
+  "risk_level": 2,
+  "allowed_actions": [
+    "ping",
+    "verify_receipt_path"
+  ],
+  "forbidden_actions": [
+    "delete",
+    "rm",
+    "format",
+    "reboot",
+    "shutdown"
+  ],
+  "payload": "Confirm bridge receipt path. No live execution.",
+  "rob_approval_status": "APPROVED",
+  "newton_review_status": "REVIEWED",
+  "nonce": "NONCE-9031378",
+  "command_hash": "85a9ddbc359a66c34d7c04f435478df345d95e47a44c297ca6d9cac909bc0fbd",
+  "receipt_requirements": {
+    "notify_channel": "Telegram",
+    "retention_policy": "15d"
+  }
+}

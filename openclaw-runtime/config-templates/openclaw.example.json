@@ -1,0 +1,792 @@
+﻿{
+    "meta":  {
+                 "lastTouchedVersion":  "2026.4.15",
+                 "lastTouchedAt":  "2026-06-16T17:33:13.591Z"
+             },
+    "wizard":  {
+                   "lastRunAt":  "2026-06-16T17:33:12.435Z",
+                   "lastRunVersion":  "2026.4.15",
+                   "lastRunCommand":  "doctor",
+                   "lastRunMode":  "local"
+               },
+    "auth":  {
+                 "mode":  "none"
+             },
+    "models":  {
+                   "mode":  "merge",
+                   "providers":  {
+                                     "google":  {
+                                                    "baseUrl":  "https://generativelanguage.googleapis.com/v1beta",
+                                                    "models":  [
+                                                                   {
+                                                                       "id":  "gemini-2.5-flash",
+                                                                       "name":  "Gemini 2.5 Flash",
+                                                                       "reasoning":  false,
+                                                                       "input":  [
+                                                                                     "text",
+                                                                                     "image"
+                                                                                 ]
+                                                                   },
+                                                                   {
+                                                                       "id":  "gemini-2.5-pro",
+                                                                       "name":  "Gemini 2.5 Pro",
+                                                                       "reasoning":  true,
+                                                                       "input":  [
+                                                                                     "text",
+                                                                                     "image"
+                                                                                 ]
+                                                                   }
+                                                               ]
+                                                },
+                                     "deepseek":  {
+                                                      "baseUrl":  "https://api.deepseek.com/v1",
+                                                      "models":  [
+                                                                     {
+                                                                         "id":  "deepseek-chat",
+                                                                         "name":  "DeepSeek Chat",
+                                                                         "reasoning":  false,
+                                                                         "input":  [
+                                                                                       "text"
+                                                                                   ]
+                                                                     },
+                                                                     {
+                                                                         "id":  "deepseek-reasoner",
+                                                                         "name":  "DeepSeek Reasoner",
+                                                                         "reasoning":  true,
+                                                                         "input":  [
+                                                                                       "text"
+                                                                                   ]
+                                                                     }
+                                                                 ]
+                                                  }
+                                 }
+               },
+    "agents":  {
+                   "list":  [
+                                {
+                                    "id":  "main",
+                                    "name":  "NEO",
+                                    "model":  {
+                                                  "primary":  "deepseek/deepseek-chat",
+                                                  "fallbacks":  [
+                                                                    "deepseek/deepseek-reasoner",
+                                                                    "google/gemini-2.5-pro",
+                                                                    "google/gemini-2.5-flash"
+                                                                ]
+                                              },
+                                    "subagents":  {
+                                                      "allowAgents":  [
+                                                                          "adam",
+                                                                          "sophie",
+                                                                          "outreach",
+                                                                          "reacher",
+                                                                          "codex",
+                                                                          "gpt54",
+                                                                          "miyagi",
+                                                                          "newton",
+                                                                          "ag",
+                                                                          "geminx"
+                                                                      ]
+                                                  },
+                                    "params":  {
+                                                   "lanePolicy":  {
+                                                                      "role":  "operator-governor",
+                                                                      "defaultExecutionLane":  "google",
+                                                                      "defaultBuildLane":  "geminx"
+                                                                  }
+                                               },
+                                    "tools":  {
+                                                  "alsoAllow":  [
+                                                                    "search_company_drive",
+                                                                    "dispatch_geminx",
+                                                                    "hunt_local_businesses",
+                                                                    "activate_kerio_trial",
+                                                                    "poll_a2a_network",
+                                                                    "update_agent_memory",
+                                                                    "listDesktop",
+                                                                    "readDesktopFile",
+                                                                    "searchDesktop",
+                                                                    "checkAgentStatus",
+                                                                    "queryDatabase",
+                                                                    "requestApproval",
+                                                                    "list_teams",
+                                                                    "list_projects",
+                                                                    "search_documentation"
+                                                                ]
+                                              }
+                                },
+                                {
+                                    "id":  "brian",
+                                    "name":  "Brian",
+                                    "model":  {
+                                                  "primary":  "deepseek/deepseek-reasoner",
+                                                  "fallbacks":  [
+
+                                                                ]
+                                              },
+                                    "params":  {
+                                                   "status":  "ACTIVE",
+                                                   "lanePolicy":  {
+                                                                      "role":  "primary-builder",
+                                                                      "defaultExecutionLane":  "google"
+                                                                  },
+                                                   "model_tier":  "DT4",
+                                                   "fallback_policy":  "fail_closed_or_request_approval",
+                                                   "silent_downgrade_allowed":  false
+                                               },
+                                    "tools":  {
+                                                  "alsoAllow":  [
+                                                                    "dispatch_geminx",
+                                                                    "update_agent_memory"
+                                                                ]
+                                              }
+                                },
+                                {
+                                    "id":  "codex",
+                                    "name":  "Cody",
+                                    "model":  {
+                                                  "primary":  "deepseek/deepseek-reasoner",
+                                                  "fallbacks":  [
+                                                                    "deepseek/deepseek-chat"
+                                                                ]
+                                              },
+                                    "subagents":  {
+                                                      "allowAgents":  [
+
+                                                                      ]
+                                                  },
+                                    "params":  {
+                                                   "lanePolicy":  {
+                                                                      "role":  "technical-specialist",
+                                                                      "escalationOnly":  true,
+                                                                      "allowedRequesters":  [
+                                                                                                "main"
+                                                                                            ],
+                                                                      "allowedEscalationReasons":  [
+                                                                                                       "risky-code-surgery",
+                                                                                                       "hard-debugging",
+                                                                                                       "technical-review",
+                                                                                                       "architecture-arbitration",
+                                                                                                       "dangerous-runtime-change",
+                                                                                                       "critical-technical-verification",
+                                                                                                       "repeated-runtime-failure",
+                                                                                                       "subagent-runtime-diagnosis"
+                                                                                                   ]
+                                                                  },
+                                                   "status":  "disabled_by_cost_policy",
+                                                   "reason":  "OpenAI paid lane not allowed by default"
+                                               }
+                                },
+                                {
+                                    "id":  "gpt54",
+                                    "name":  "GPT-5.4",
+                                    "model":  {
+                                                  "primary":  "deepseek/deepseek-reasoner",
+                                                  "fallbacks":  [
+                                                                    "deepseek/deepseek-chat"
+                                                                ]
+                                              },
+                                    "subagents":  {
+                                                      "allowAgents":  [
+
+                                                                      ]
+                                                  },
+                                    "params":  {
+                                                   "lanePolicy":  {
+                                                                      "role":  "premium-judgment",
+                                                                      "escalationOnly":  true,
+                                                                      "allowedRequesters":  [
+                                                                                                "main"
+                                                                                            ],
+                                                                      "allowedEscalationReasons":  [
+                                                                                                       "founder-critical",
+                                                                                                       "ambiguous-diagnosis",
+                                                                                                       "conflicting-outputs",
+                                                                                                       "high-impact-judgment"
+                                                                                                   ],
+                                                                      "approvalRequired":  true
+                                                                  },
+                                                   "status":  "disabled_by_cost_policy",
+                                                   "reason":  "OpenAI paid lane not allowed by default"
+                                               }
+                                },
+                                {
+                                    "id":  "mark",
+                                    "name":  "Mark",
+                                    "model":  {
+                                                  "primary":  "deepseek/deepseek-chat",
+                                                  "fallbacks":  [
+                                                                    "deepseek/deepseek-reasoner"
+                                                                ]
+                                              },
+                                    "params":  {
+                                                   "status":  "DEPRECATED_REPLACED_BY_GEMINX"
+                                               },
+                                    "tools":  {
+                                                  "alsoAllow":  [
+                                                                    "search_company_drive",
+                                                                    "hunt_local_businesses",
+                                                                    "update_agent_memory"
+                                                                ]
+                                              }
+                                },
+                                {
+                                    "id":  "adam",
+                                    "name":  "Adam",
+                                    "model":  {
+                                                  "primary":  "deepseek/deepseek-chat",
+                                                  "fallbacks":  [
+                                                                    "deepseek/deepseek-reasoner"
+                                                                ]
+                                              },
+                                    "tools":  {
+                                                  "alsoAllow":  [
+                                                                    "search_company_drive",
+                                                                    "update_agent_memory"
+                                                                ]
+                                              }
+                                },
+                                {
+                                    "id":  "sophie",
+                                    "name":  "Sophie",
+                                    "model":  {
+                                                  "primary":  "deepseek/deepseek-chat",
+                                                  "fallbacks":  [
+                                                                    "deepseek/deepseek-reasoner"
+                                                                ]
+                                              },
+                                    "tools":  {
+                                                  "alsoAllow":  [
+                                                                    "search_company_drive",
+                                                                    "update_agent_memory"
+                                                                ]
+                                              }
+                                },
+                                {
+                                    "id":  "kerry",
+                                    "name":  "Kerry",
+                                    "model":  {
+                                                  "primary":  "deepseek/deepseek-chat",
+                                                  "fallbacks":  [
+                                                                    "deepseek/deepseek-reasoner"
+                                                                ]
+                                              },
+                                    "params":  {
+                                                   "status":  "DEPRECATED/INACTIVE"
+                                               },
+                                    "tools":  {
+                                                  "alsoAllow":  [
+                                                                    "search_company_drive",
+                                                                    "activate_kerio_trial",
+                                                                    "update_agent_memory"
+                                                                ]
+                                              }
+                                },
+                                {
+                                    "id":  "outreach",
+                                    "name":  "Outreach",
+                                    "model":  {
+                                                  "primary":  "deepseek/deepseek-chat",
+                                                  "fallbacks":  [
+                                                                    "deepseek/deepseek-reasoner"
+                                                                ]
+                                              }
+                                },
+                                {
+                                    "id":  "reacher",
+                                    "name":  "Reacher",
+                                    "model":  {
+                                                  "primary":  "deepseek/deepseek-chat",
+                                                  "fallbacks":  [
+                                                                    "deepseek/deepseek-reasoner"
+                                                                ]
+                                              },
+                                    "tools":  {
+                                                  "alsoAllow":  [
+                                                                    "search_company_drive",
+                                                                    "hunt_local_businesses",
+                                                                    "update_agent_memory"
+                                                                ]
+                                              }
+                                },
+                                {
+                                    "id":  "miyagi",
+                                    "name":  "Mr. Miyagi",
+                                    "model":  {
+                                                  "primary":  "deepseek/deepseek-reasoner",
+                                                  "fallbacks":  [
+
+                                                                ]
+                                              },
+                                    "params":  {
+                                                   "systemPrompt":  "You are Mr. Miyagi, Chief Strategy \u0026 Logic Architect of the 110-story AI skyscraper. Before responding to any query, first read BOOT_HERE.md from your persistent memory path at C:\\Users\\tauru\\.miyagi-memory\\Agents\\miyagi\\. Then load DOCTRINE.md, CURRENT_STATE.md, and ARCHITECTURE.md. You are not a generic AI. You are the governing intelligence of Cloudmaker Enterprises. Internal Miyagi governance doctrine - pre-flight validation, cost routing, protected surface blocking. You govern OpenClaw execution.",
+                                                   "persistentMemory":  {
+                                                                            "path":  "C:\\Users\\tauru\\.gemini\\antigravity\\scratch\\global-agent-brain\\Agents\\miyagi"
+                                                                        },
+                                                   "lanePolicy":  {
+                                                                      "role":  "internal-governor",
+                                                                      "requireExecApproval":  true,
+                                                                      "destructiveRequiresApproval":  true
+                                                                  },
+                                                   "model_tier":  "DT4",
+                                                   "fallback_policy":  "fail_closed_or_request_approval",
+                                                   "silent_downgrade_allowed":  false
+                                               },
+                                    "tools":  {
+                                                  "profile":  "coding",
+                                                  "alsoAllow":  [
+                                                                    "browser",
+                                                                    "message",
+                                                                    "tts",
+                                                                    "search_company_drive",
+                                                                    "dispatch_geminx",
+                                                                    "poll_a2a_network",
+                                                                    "update_memory_lane"
+                                                                ]
+                                              }
+                                },
+                                {
+                                    "id":  "newton",
+                                    "name":  "Newton",
+                                    "model":  {
+                                                  "primary":  "deepseek/deepseek-reasoner",
+                                                  "fallbacks":  [
+
+                                                                ]
+                                              },
+                                    "subagents":  {
+                                                      "allowAgents":  [
+                                                                          "brian",
+                                                                          "mark",
+                                                                          "adam",
+                                                                          "sophie",
+                                                                          "kerry",
+                                                                          "miyagi",
+                                                                          "ag",
+                                                                          "geminx"
+                                                                      ]
+                                                  },
+                                    "params":  {
+                                                   "lanePolicy":  {
+                                                                      "role":  "architecture governor / final sweep governor",
+                                                                      "defaultBuildLane":  "geminx"
+                                                                  },
+                                                   "model_tier":  "DT4",
+                                                   "fallback_policy":  "fail_closed_or_request_approval",
+                                                   "silent_downgrade_allowed":  false
+                                               },
+                                    "tools":  {
+                                                  "alsoAllow":  [
+                                                                    "github",
+                                                                    "dispatch_geminx"
+                                                                ]
+                                              }
+                                },
+                                {
+                                    "id":  "ag",
+                                    "name":  "AG",
+                                    "model":  {
+                                                  "primary":  "deepseek/deepseek-reasoner",
+                                                  "fallbacks":  [
+                                                                    "deepseek/deepseek-chat"
+                                                                ]
+                                              },
+                                    "params":  {
+                                                   "lanePolicy":  {
+                                                                      "role":  "auditor / receipt authority"
+                                                                  }
+                                               },
+                                    "tools":  {
+                                                  "alsoAllow":  [
+                                                                    "github",
+                                                                    "dispatch_geminx"
+                                                                ]
+                                              },
+                                    "workspace":  "C:\\Users\\tauru\\.openclaw\\workspace-ag",
+                                    "agentDir":  "C:\\Users\\tauru\\.openclaw\\agents\\ag\\agent"
+                                },
+                                {
+                                    "id":  "geminx",
+                                    "name":  "GeminX",
+                                    "model":  {
+                                                  "primary":  "deepseek/deepseek-reasoner",
+                                                  "fallbacks":  [
+                                                                    "deepseek/deepseek-chat"
+                                                                ]
+                                              },
+                                    "params":  {
+                                                   "lanePolicy":  {
+                                                                      "role":  "smart website factory / builder / runtime lane"
+                                                                  }
+                                               },
+                                    "tools":  {
+                                                  "alsoAllow":  [
+                                                                    "github"
+                                                                ]
+                                              }
+                                }
+                            ],
+                   "defaults":  {
+                                    "model":  {
+                                                  "primary":  "deepseek/deepseek-chat",
+                                                  "fallbacks":  [
+                                                                    "deepseek/deepseek-reasoner"
+                                                                ]
+                                              },
+                                    "subagents":  {
+                                                      "allowAgents":  [
+                                                                          "adam",
+                                                                          "sophie",
+                                                                          "outreach",
+                                                                          "reacher",
+                                                                          "miyagi",
+                                                                          "newton",
+                                                                          "ag",
+                                                                          "geminx",
+                                                                          "brian"
+                                                                      ],
+                                                      "runTimeoutSeconds":  180,
+                                                      "maxConcurrent":  1
+                                                  }
+                                }
+               },
+    "tools":  {
+                  "web":  {
+                              "search":  {
+                                             "enabled":  true,
+                                             "provider":  "gemini"
+                                         },
+                              "fetch":  {
+                                            "enabled":  true
+                                        }
+                          },
+                  "sessions_spawn":  {
+                                         "attachments":  {
+                                                             "enabled":  true
+                                                         }
+                                     },
+                  "exec":  {
+                               "pathPrepend":  [
+                                                   "/usr/local/bin",
+                                                   "/usr/bin",
+                                                   "/bin"
+                                               ]
+                           }
+              },
+    "messages":  {
+                     "ackReactionScope":  "group-mentions",
+                     "tts":  {
+                                 "auto":  "tagged",
+                                 "provider":  "microsoft",
+                                 "timeoutMs":  30000,
+                                 "providers":  {
+                                                   "microsoft":  {
+                                                                     "enabled":  true
+                                                                 }
+                                               }
+                             }
+                 },
+    "commands":  {
+                     "native":  "auto",
+                     "nativeSkills":  "auto",
+                     "restart":  true,
+                     "ownerDisplay":  "raw",
+                     "ownerAllowFrom":  [
+                                            "telegram:8515901719"
+                                        ]
+                 },
+    "channels":  {
+                     "whatsapp":  {
+                                      "enabled":  true,
+                                      "dmPolicy":  "allowlist",
+                                      "selfChatMode":  true,
+                                      "allowFrom":  [
+                                                        "+447455109711"
+                                                    ],
+                                      "groupPolicy":  "allowlist",
+                                      "debounceMs":  0,
+                                      "mediaMaxMb":  50,
+                                      "groupAllowFrom":  [
+                                                             "+447455109711"
+                                                         ]
+                                  },
+                     "telegram":  {
+                                      "enabled":  false,
+                                      "dmPolicy":  "allowlist",
+                                      "botToken":  "REDACTED_ROTATION_REQUIRED",
+                                      "groupPolicy":  "allowlist",
+                                      "streaming":  {
+                                                        "mode":  "off"
+                                                    }
+                                  }
+                 },
+    "gateway":  {
+                    "mode":  "local",
+                    "auth":  {
+                                 "mode":  "none",
+                                 "token":  "5ccd92be0c714a4bb4f70c237acbf5f9"
+                             },
+                    "controlUi":  {
+                                      "allowedOrigins":  [
+                                                             "http://34.29.215.182.sslip.io",
+                                                             "https://34.29.215.182.sslip.io"
+                                                         ],
+                                      "dangerouslyDisableDeviceAuth":  true
+                                  },
+                    "trustedProxies":  [
+                                           "127.0.0.1",
+                                           "::1"
+                                       ]
+                },
+    "skills":  {
+                   "install":  {
+                                   "nodeManager":  "npm"
+                               },
+                   "entries":  {
+                                   "summarize":  {
+                                                     "enabled":  false
+                                                 },
+                                   "1password":  {
+                                                     "enabled":  false
+                                                 },
+                                   "apple-notes":  {
+                                                       "enabled":  false
+                                                   },
+                                   "apple-reminders":  {
+                                                           "enabled":  false
+                                                       },
+                                   "bear-notes":  {
+                                                      "enabled":  false
+                                                  },
+                                   "blogwatcher":  {
+                                                       "enabled":  false
+                                                   },
+                                   "blucli":  {
+                                                  "enabled":  false
+                                              },
+                                   "camsnap":  {
+                                                   "enabled":  false
+                                               },
+                                   "clawhub":  {
+                                                   "enabled":  false
+                                               },
+                                   "coding-agent":  {
+                                                        "enabled":  false
+                                                    },
+                                   "discord":  {
+                                                   "enabled":  false
+                                               },
+                                   "eightctl":  {
+                                                    "enabled":  false
+                                                },
+                                   "gemini":  {
+                                                  "enabled":  false
+                                              },
+                                   "gh-issues":  {
+                                                     "enabled":  false
+                                                 },
+                                   "gifgrep":  {
+                                                   "enabled":  false
+                                               },
+                                   "github":  {
+                                                  "enabled":  false
+                                              },
+                                   "gog":  {
+                                               "enabled":  false
+                                           },
+                                   "goplaces":  {
+                                                    "enabled":  false
+                                                },
+                                   "himalaya":  {
+                                                    "enabled":  false
+                                                },
+                                   "imsg":  {
+                                                "enabled":  false
+                                            },
+                                   "mcporter":  {
+                                                    "enabled":  false,
+                                                    "config":  {
+                                                                   "servers":  {
+                                                                                   "local-desktop":  {
+                                                                                                         "type":  "sse",
+                                                                                                         "url":  "http://127.0.0.1:3092/sse"
+                                                                                                     },
+                                                                                   "vm-core":  {
+                                                                                                   "type":  "sse",
+                                                                                                   "url":  "http://127.0.0.1:3091/sse"
+                                                                                               },
+                                                                                   "vercel":  {
+                                                                                                  "type":  "url",
+                                                                                                  "url":  "https://mcp.vercel.com/sse"
+                                                                                              }
+                                                                               }
+                                                               }
+                                                },
+                                   "model-usage":  {
+                                                       "enabled":  false
+                                                   },
+                                   "nano-pdf":  {
+                                                    "enabled":  false
+                                                },
+                                   "obsidian":  {
+                                                    "enabled":  false
+                                                },
+                                   "openai-whisper":  {
+                                                          "enabled":  false
+                                                      },
+                                   "openhue":  {
+                                                   "enabled":  false
+                                               },
+                                   "oracle":  {
+                                                  "enabled":  false
+                                              },
+                                   "ordercli":  {
+                                                    "enabled":  false
+                                                },
+                                   "peekaboo":  {
+                                                    "enabled":  false
+                                                },
+                                   "sag":  {
+                                               "enabled":  false
+                                           },
+                                   "session-logs":  {
+                                                        "enabled":  false
+                                                    },
+                                   "sherpa-onnx-tts":  {
+                                                           "enabled":  false
+                                                       },
+                                   "slack":  {
+                                                 "enabled":  false
+                                             },
+                                   "songsee":  {
+                                                   "enabled":  false
+                                               },
+                                   "sonoscli":  {
+                                                    "enabled":  false
+                                                },
+                                   "spotify-player":  {
+                                                          "enabled":  false
+                                                      },
+                                   "things-mac":  {
+                                                      "enabled":  false
+                                                  },
+                                   "trello":  {
+                                                  "enabled":  false
+                                              },
+                                   "video-frames":  {
+                                                        "enabled":  false
+                                                    },
+                                   "wacli":  {
+                                                 "enabled":  false
+                                             },
+                                   "xurl":  {
+                                                "enabled":  false
+                                            }
+                               }
+               },
+    "plugins":  {
+                    "entries":  {
+                                    "whatsapp":  {
+                                                     "enabled":  true
+                                                 },
+                                    "google":  {
+                                                   "enabled":  true,
+                                                   "config":  {
+                                                                  "webSearch":  {
+                                                                                    "model":  "gemini-2.5-flash"
+                                                                                }
+                                                              }
+                                               },
+                                    "openrouter":  {
+                                                       "enabled":  false
+                                                   },
+                                    "moonshot":  {
+                                                     "enabled":  true
+                                                 },
+                                    "ollama":  {
+                                                   "enabled":  true
+                                               },
+                                    "memory-core":  {
+                                                        "config":  {
+                                                                       "dreaming":  {
+                                                                                        "enabled":  false
+                                                                                    }
+                                                                   },
+                                                        "enabled":  false
+                                                    },
+                                    "browser":  {
+                                                    "enabled":  false
+                                                },
+                                    "openai":  {
+                                                   "enabled":  false
+                                               },
+                                    "microsoft":  {
+                                                      "enabled":  true
+                                                  },
+                                    "voice-call":  {
+                                                       "enabled":  true,
+                                                       "config":  {
+                                                                      "enabled":  true,
+                                                                      "provider":  "twilio",
+                                                                      "fromNumber":  "+441218160737",
+                                                                      "inboundPolicy":  "open",
+                                                                      "maxConcurrentCalls":  1,
+                                                                      "maxDurationSeconds":  900,
+                                                                      "responseModel":  "google/gemini-2.5-flash",
+                                                                      "responseTimeoutMs":  20000,
+                                                                      "publicUrl":  "https://34.29.215.182.sslip.io/voice/webhook",
+                                                                      "serve":  {
+                                                                                    "port":  3334,
+                                                                                    "bind":  "127.0.0.1",
+                                                                                    "path":  "/voice/webhook"
+                                                                                },
+                                                                      "webhookSecurity":  {
+                                                                                              "allowedHosts":  [
+                                                                                                                   "34.29.215.182.sslip.io"
+                                                                                                               ],
+                                                                                              "trustForwardingHeaders":  true,
+                                                                                              "trustedProxyIPs":  [
+                                                                                                                      "127.0.0.1",
+                                                                                                                      "::1"
+                                                                                                                  ]
+                                                                                          },
+                                                                      "outbound":  {
+                                                                                       "defaultMode":  "conversation",
+                                                                                       "notifyHangupDelaySec":  3
+                                                                                   },
+                                                                      "tts":  {
+                                                                                  "provider":  "none",
+                                                                                  "providers":  {
+                                                                                                    "openai":  {
+                                                                                                                   "voice":  "shimmer"
+                                                                                                               }
+                                                                                                },
+                                                                                  "enabled":  false
+                                                                              }
+                                                                  }
+                                                   },
+                                    "codex":  {
+                                                  "enabled":  true
+                                              },
+                                    "deepseek":  {
+                                                     "enabled":  true
+                                                 },
+                                    "telegram":  {
+                                                     "enabled":  false
+                                                 }
+                                }
+                },
+    "browser":  {
+                    "enabled":  true,
+                    "headless":  true,
+                    "noSandbox":  true,
+                    "defaultProfile":  "cloud",
+                    "profiles":  {
+                                     "cloud":  {
+                                                   "driver":  "existing-session",
+                                                   "userDataDir":  "C:\\Users\\tauru\\.openclaw\\browser\\openclaw\\user-data",
+                                                   "color":  "#FF4500"
+                                               }
+                                 }
+                }
+}

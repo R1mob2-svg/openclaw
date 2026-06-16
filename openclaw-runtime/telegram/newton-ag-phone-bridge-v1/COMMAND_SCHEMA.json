@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NewtonCommandSchema",
+  "type": "object",
+  "properties": {
+    "command_id": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "created_by": { "type": "string" },
+    "source_channel": { "type": "string" },
+    "target_agent": { "type": "string" },
+    "title": { "type": "string" },
+    "risk_level": { "type": "integer", "minimum": 1, "maximum": 10 },
+    "allowed_actions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "forbidden_actions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "payload": { "type": "string" },
+    "rob_approval_status": { "type": "string", "enum": ["APPROVED", "PENDING", "REJECTED"] },
+    "newton_review_status": { "type": "string", "enum": ["REVIEWED", "PENDING", "REJECTED"] },
+    "command_hash": { "type": "string" },
+    "nonce": { "type": "string" },
+    "receipt_requirements": {
+      "type": "object",
+      "properties": {
+        "notify_channel": { "type": "string" },
+        "retention_policy": { "type": "string" }
+      },
+      "required": ["notify_channel"]
+    },
+    "explicit_approvals": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "required": [
+    "command_id",
+    "created_at",
+    "created_by",
+    "source_channel",
+    "target_agent",
+    "title",
+    "risk_level",
+    "allowed_actions",
+    "forbidden_actions",
+    "payload",
+    "rob_approval_status",
+    "newton_review_status",
+    "command_hash",
+    "nonce",
+    "receipt_requirements"
+  ]
+}

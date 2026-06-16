@@ -1,0 +1,6 @@
+[CLOUDMAKER COMMAND ENVELOPE]
+command_id: PHONE_COMMAND_FINAL_E2E_20260527_002
+source: GitHub fallback
+target_agent: NEO
+task_type: ECHO
+payload: { "message": "Ensure this makes it back to GitHub!" }

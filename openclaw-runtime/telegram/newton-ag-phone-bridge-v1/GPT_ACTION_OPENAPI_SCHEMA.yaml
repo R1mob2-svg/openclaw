@@ -1,0 +1,131 @@
+openapi: 3.0.0
+info:
+  title: Newton AG Phone Bridge Relay API
+  description: API for ChatGPT (Newton) to submit approved commands to the Antigravity command ledger.
+  version: 1.0.0
+servers:
+  - url: https://your-vercel-project.vercel.app
+    description: Production Hosted Relay
+paths:
+  /api/newton-command:
+    post:
+      summary: Submit an approved command package
+      operationId: submitNewtonCommand
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewtonCommandPackage'
+      responses:
+        '200':
+          description: Command successfully queued and written to the ledger
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: queued
+                  file_path:
+                    type: string
+                    example: CommandLedger/approved/CMD-1781464535623-838.json
+                  commit_sha:
+                    type: string
+                    example: b3f2b1a0...
+        '400':
+          description: Invalid command schema or validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Invalid command package schema
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - replay check or policy violation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Replay attack detected
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: API token configured in ChatGPT Action secrets.
+  schemas:
+    NewtonCommandPackage:
+      type: object
+      required:
+        - command_id
+        - timestamp
+        - payload
+        - approval
+        - integrity
+      properties:
+        command_id:
+          type: string
+          example: CMD-1781464535623-838
+        timestamp:
+          type: string
+          format: date-time
+          example: '2026-06-14T20:45:00Z'
+        payload:
+          type: object
+          required:
+            - target_surface
+            - action
+            - params
+          properties:
+            target_surface:
+              type: string
+              example: local-bridge-dry-run
+            action:
+              type: string
+              example: PING
+            params:
+              type: object
+              additionalProperties: true
+        approval:
+          type: object
+          required:
+            - approved_by
+            - approved_at
+            - nonce
+          properties:
+            approved_by:
+              type: string
+              example: ROB
+            approved_at:
+              type: string
+              format: date-time
+              example: '2026-06-14T20:46:00Z'
+            nonce:
+              type: string
+              example: nonce_f3b2a10c9d
+            protected_surface_approved:
+              type: boolean
+              example: false
+        integrity:
+          type: object
+          required:
+            - command_hash
+            - newton_review_status
+          properties:
+            command_hash:
+              type: string
+              example: a7b6c5...
+            newton_review_status:
+              type: string
+              example: APPROVED_BY_NEWTON

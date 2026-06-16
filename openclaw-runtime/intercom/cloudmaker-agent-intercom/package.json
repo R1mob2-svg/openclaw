@@ -1,0 +1,27 @@
+{
+  "name": "cloudmaker-agent-intercom",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node test_suite.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@google-cloud/firestore": "^8.6.0",
+    "@google-cloud/tasks": "^6.2.3",
+    "body-parser": "^2.2.2",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "googleapis": "^171.4.0",
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "node-fetch": "^2.7.0"
+  }
+}
