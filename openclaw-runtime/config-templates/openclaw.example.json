@@ -10,7 +10,7 @@
                    "lastRunMode":  "local"
                },
     "auth":  {
-                 "mode":  "none"
+                 "mode":  "\u003cLOCAL_AUTH_MODE_PLACEHOLDER\u003e"
              },
     "models":  {
                    "mode":  "merge",
