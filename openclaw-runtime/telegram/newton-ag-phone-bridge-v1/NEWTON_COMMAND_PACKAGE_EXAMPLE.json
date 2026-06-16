@@ -1,0 +1,21 @@
+{
+  "command_id": "CMD-1781464535623-838",
+  "timestamp": "2026-06-14T20:45:00Z",
+  "payload": {
+    "target_surface": "local-bridge-dry-run",
+    "action": "PING",
+    "params": {
+      "message": "Confirm bridge receipt flow. No OpenClaw/runtime/cloud/customer action."
+    }
+  },
+  "approval": {
+    "approved_by": "ROB",
+    "approved_at": "2026-06-14T20:46:00Z",
+    "nonce": "nonce_f3b2a10c9d",
+    "protected_surface_approved": false
+  },
+  "integrity": {
+    "command_hash": "246bf992e59e9da2482329ebc0e353272e12e1a2d1d0c9f807212ebcb3f2b1a0",
+    "newton_review_status": "APPROVED_BY_NEWTON"
+  }
+}

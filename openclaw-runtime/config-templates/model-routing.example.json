@@ -1,0 +1,20 @@
+﻿{
+  "routing": {
+    "default": "openai/gpt-4o",
+    "fallback": "anthropic/claude-3-5-sonnet-20240620"
+  },
+  "providers": {
+    "openai": {
+      "apiKey": "<OPENAI_API_KEY>"
+    },
+    "anthropic": {
+      "apiKey": "<ANTHROPIC_API_KEY>"
+    },
+    "gemini": {
+      "apiKey": "<GEMINI_API_KEY>"
+    },
+    "deepseek": {
+      "apiKey": "<DEEPSEEK_API_KEY>"
+    }
+  }
+}

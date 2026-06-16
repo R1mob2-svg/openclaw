@@ -1,0 +1,99 @@
+name: Command Intake
+
+on:
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  process-command:
+    if: >-
+      ${{
+        (
+          github.event_name == 'issues' &&
+          (
+            contains(github.event.issue.title, '[CLOUDMAKER COMMAND ENVELOPE]') ||
+            contains(github.event.issue.body, '[CLOUDMAKER COMMAND ENVELOPE]')
+          )
+        ) ||
+        (
+          github.event_name == 'issue_comment' &&
+          contains(github.event.comment.body, '[CLOUDMAKER COMMAND ENVELOPE]')
+        )
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Extract JSON Payload
+        id: extract
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const sourceBody = context.payload.comment?.body || context.payload.issue?.body || '';
+            const match = sourceBody.match(/```json\r?\n([\s\S]*?)\r?\n```/);
+
+            if (match && match[1]) {
+              try {
+                const parsed = JSON.parse(match[1]);
+                core.setOutput('payload', JSON.stringify(parsed));
+                core.setOutput('issue_number', String(context.payload.issue.number));
+                core.setOutput('comment_id', context.payload.comment?.id ? String(context.payload.comment.id) : '');
+                return;
+              } catch (e) {
+                console.error("JSON parse error:", e);
+              }
+            }
+
+            core.setFailed("No valid JSON block found in command envelope source.");
+
+      - name: Send to Intercom API
+        id: send_api
+        env:
+          INTERCOM_API_KEY: ${{ secrets.INTERCOM_API_KEY }}
+          PAYLOAD: ${{ steps.extract.outputs.payload }}
+          ISSUE_NUMBER: ${{ steps.extract.outputs.issue_number }}
+          COMMENT_ID: ${{ steps.extract.outputs.comment_id }}
+          REPO_FULL_NAME: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          MODIFIED_PAYLOAD=$(echo "$PAYLOAD" | jq \
+            --arg issue "$ISSUE_NUMBER" \
+            --arg repo "$REPO_FULL_NAME" \
+            --arg event "$EVENT_NAME" \
+            --arg comment "$COMMENT_ID" \
+            '. + {
+              github_issue_number: $issue,
+              source_issue_number: $issue,
+              source_repo: $repo,
+              source_surface: (.source_surface // $event),
+              github_comment_id: (if $comment == "" then null else $comment end),
+              title: (.command_id // .title // ("github-command-" + $issue)),
+              description: (.mission // .description // .task_type // "No mission provided"),
+              idempotency_key: (.idempotency_key // (.command_id // ("github-command-" + $issue + "-" + (if $comment == "" then "issue" else $comment end))))
+            }')
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "https://cloudmaker-agent-intercom-608388585234.europe-west2.run.app/tasks" \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: $INTERCOM_API_KEY" \
+            -d "$MODIFIED_PAYLOAD")
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | sed -e 's/HTTP_STATUS\:.*//g')
+          if [ "$HTTP_STATUS" -ne 200 ] && [ "$HTTP_STATUS" -ne 201 ]; then
+            echo "Failed to send to Intercom API: $BODY"
+            exit 1
+          fi
+
+      - name: Post ACK Comment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const source = context.payload.comment ? `comment ${context.payload.comment.id}` : `issue ${context.issue.number}`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `ACK: Command successfully received from ${source} and routed to Intercom API.`
+            });

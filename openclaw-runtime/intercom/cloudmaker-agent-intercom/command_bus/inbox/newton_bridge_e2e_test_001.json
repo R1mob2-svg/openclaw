@@ -1,0 +1,5 @@
+{
+  "target_agent": "AG",
+  "title": "NEWTON_BRIDGE_E2E_TEST",
+  "description": "Prove Newton file queue to bridge to Cloud Intercom to AG receipt. AG must claim, heartbeat, and return receipt."
+}

@@ -1,0 +1,22 @@
+{
+  "name": "newton-ag-phone-bridge-v1",
+  "version": "1.0.0",
+  "description": "Newton <=> AG Phone Bridge V1 Scaffold",
+  "main": "src/validate-command.js",
+  "scripts": {
+    "dry-run": "node src/relay-dry-run.js && node src/simulate-ag-worker.js",
+    "validate": "node src/validate-command.js",
+    "self-test": "node src/bridge-self-test.js",
+    "ledger-dry-run": "node src/github-ledger-dry-run.js && node src/github-ledger-worker-dry-run.js",
+    "github-api-ledger-dry-run": "node src/github-api-ledger-dry-run.js && node src/github-api-worker-dry-run.js",
+    "secret-hygiene-test": "node src/secret-hygiene-self-test.js",
+    "webhook-dry-run": "node src/webhook-intake-dry-run.js",
+    "webhook-self-test": "node src/webhook-self-test.js",
+    "relay-self-test": "node src/relay-self-test.js",
+    "ag-worker-self-test": "node src/ag-ledger-worker-self-test.js",
+    "live-bridge-ping": "node src/live-bridge-ping.js",
+    "start-worker-daemon": "node src/ag-ledger-worker-safe.js --daemon"
+  },
+  "author": "Antigravity",
+  "license": "MIT"
+}

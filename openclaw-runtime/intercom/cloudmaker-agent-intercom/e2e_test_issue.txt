@@ -1,0 +1,16 @@
+[CLOUDMAKER COMMAND ENVELOPE]
+
+```json
+{
+  "command_id": "E2E_SPINE_PROOF_20260529_001",
+  "requested_by": "Rob / Newton",
+  "source_surface": "github_issue",
+  "target_agent": "AG",
+  "cc_agents": ["NEO", "OpenClaw"],
+  "priority": "P0",
+  "task_type": "ECHO_RECEIPT_PROOF",
+  "live_actions": false,
+  "mission": "Fresh E2E spine proof. Confirm workflow routes to europe-west2. Confirm source_repo and github_issue_number persist into Firestore. Confirm github-receipt-writer posts final receipt back to this GitHub issue. No fake PASS.",
+  "acceptance_gate": "This GitHub issue must receive a final receipt comment from github-receipt-writer — not just an ACK. Only then is the spine accepted as proven."
+}
+```

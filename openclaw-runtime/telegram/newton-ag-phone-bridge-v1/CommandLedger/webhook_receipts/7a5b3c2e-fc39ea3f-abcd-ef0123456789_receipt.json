@@ -1,0 +1,11 @@
+{
+  "webhook_receipt_id": "WREC-1781465923358-9bacea",
+  "delivery_id": "7a5b3c2e-fc39ea3f-abcd-ef0123456789",
+  "received_at": "2026-06-14T19:38:43.358Z",
+  "status": "QUEUED",
+  "ingested_files": [
+    "CommandLedger/approved/CMD-1781465608091-54.json"
+  ],
+  "summary": "Webhook delivery processed and validated. Ingested 1 command file(s).",
+  "next_safe_step": "Poll the approved directory in AG worker loop to execute."
+}
