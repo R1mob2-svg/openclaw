@@ -1,0 +1,14 @@
+{
+  "name": "@openclaw/fusion-ledger",
+  "version": "2026.6.2",
+  "description": "Append-only, redacted agent evidence and failure-candidate ledger for OpenClaw",
+  "type": "module",
+  "devDependencies": {
+    "@openclaw/plugin-sdk": "workspace:*"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

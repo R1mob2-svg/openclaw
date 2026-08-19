@@ -1,0 +1,14 @@
+{
+  "id": "fusion-ledger",
+  "activation": {
+    "onStartup": false,
+    "onConfigPaths": ["plugins.entries.fusion-ledger"]
+  },
+  "name": "Fusion Evidence Ledger",
+  "description": "Append sanitized agent events and failure candidates to an append-only local ledger.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
