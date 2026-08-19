@@ -5,4 +5,5 @@ export * from "./bounded-loop.js";
 export * from "./failure-learning.js";
 export * from "./memory.js";
 export * from "./action-policy.js";
+export * from "./approval-envelope.js";
 export * from "./recovery.js";
