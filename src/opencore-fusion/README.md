@@ -11,7 +11,10 @@ OpenCore Fusion is a local governance layer for Rob's OpenClaw fork. It combines
 - Four memory layers: working, episodic, semantic, personal.
 - Semantic promotion requires repeated independent evidence.
 - Exact action approval decisions with default approval for mutations.
+- SHA-256 approval envelopes bound to the exact tool + action + arguments, with expiry support.
 - Secret-shaped argument redaction before persistence/receipts.
+- Secretless worker capability grants: workers receive scoped authorization claims rather than provider credentials.
+- Honest operator cockpit projection derived from existing probes/events; it cannot hide failed required capabilities behind process liveness.
 - Single-supervisor recovery ladder; duplicate supervisors block auto-recovery.
 - Golden rollback is only eligible when a baseline is explicitly proven.
 
@@ -32,8 +35,9 @@ Concepts were studied from public projects including GBrain, agentic-stack, Open
 3. One canonical supervisor consumes recovery policy.
 4. Agent Brain consumes episodic failures and stages candidate lessons.
 5. Newton/AG governance promotes or retracts semantic lessons.
-6. Operator UI reads derived state instead of inventing a second state model.
-7. Secret broker/tool policy keeps raw credentials out of general workers.
+6. Operator UI reads the cockpit projection from derived evidence instead of inventing a second state model.
+7. A host-owned capability broker resolves credentials; workers receive only secretless scoped grants.
+8. Risky mutations require approval that matches the exact tool call digest, not broad standing permission.
 
 ## Non-goals
 
