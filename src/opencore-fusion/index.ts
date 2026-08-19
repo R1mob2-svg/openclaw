@@ -6,4 +6,6 @@ export * from "./failure-learning.js";
 export * from "./memory.js";
 export * from "./action-policy.js";
 export * from "./approval-envelope.js";
+export * from "./capability-grants.js";
+export * from "./operator-projection.js";
 export * from "./recovery.js";
