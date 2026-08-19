@@ -18,3 +18,9 @@ It captures a bounded set of sanitized agent event streams and writes two JSONL 
 - Failure records are evidence only; they are never automatically promoted into doctrine or configuration.
 
 This plugin is intentionally an evidence layer, not another watchdog. Existing OpenClaw health/recovery machinery remains authoritative.
+
+## Promotion and rollback
+
+Merging this source does not activate the plugin. Activation is a separate explicit config step after build/test/review and live capability proof.
+
+If the source merge itself causes a regression, revert the merge commit to restore the previous source tree. If an eventual activation causes a runtime regression, disable the `plugins.entries.fusion-ledger` entry and restore the pre-activation config snapshot before any wider recovery action.
