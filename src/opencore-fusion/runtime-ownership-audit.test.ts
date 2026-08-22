@@ -35,14 +35,39 @@ describe("NEO/OpenClaw runtime ownership preflight", () => {
       ],
       browser: {
         browserEnabled: true,
+        browserPluginAllowed: true,
+        browserPluginEnabled: true,
         playwrightResolved: true,
         availableProfiles: ["openclaw"],
       },
     });
 
     expect(result.status).toBe("fail");
-    expect(result.duplicateActiveConsumers).toEqual(["legacy-telegram-poller", "orphan-consumer"]);
+    expect(result.duplicateActiveConsumers).toEqual([
+      "process:worker:orphan-consumer",
+      "scheduled-task:poller:legacy-telegram-poller",
+    ]);
     expect(result.blockers.join(" ")).toContain("duplicate active consumer ownership");
+  });
+
+  it("does not let a second active consumer hide behind the canonical worker name", () => {
+    const result = auditRuntimeOwnership({
+      requiredWorkerName: "neo-worker",
+      owners: [
+        { kind: "pm2", name: "neo-worker", role: "worker", active: true, canonical: true },
+        { kind: "process", name: "neo-worker", role: "worker", active: true, canonical: false },
+      ],
+      browser: {
+        browserEnabled: true,
+        browserPluginAllowed: true,
+        browserPluginEnabled: true,
+        playwrightResolved: true,
+        availableProfiles: ["openclaw"],
+      },
+    });
+
+    expect(result.status).toBe("fail");
+    expect(result.duplicateActiveConsumers).toEqual(["process:worker:neo-worker"]);
   });
 
   it("does not call browser healthy from gateway/process liveness alone", () => {
@@ -59,10 +84,25 @@ describe("NEO/OpenClaw runtime ownership preflight", () => {
 
     expect(result.status).toBe("fail");
     expect(result.blockers).toContain("browser.enabled is not proven true");
-    expect(result.blockers).toContain("browser plugin is excluded by plugins.allow");
-    expect(result.blockers).toContain("browser plugin entry is disabled");
+    expect(result.blockers).toContain("browser plugin allow evidence is not proven true");
+    expect(result.blockers).toContain("browser plugin enabled evidence is not proven true");
     expect(result.blockers).toContain("Playwright runtime is not resolvable from the gateway runtime");
     expect(result.blockers).toContain("no browser profile is available for capability proof");
+  });
+
+  it("fails closed when plugin allow/enable evidence is missing rather than assuming healthy", () => {
+    const result = auditRuntimeOwnership({
+      owners: [{ kind: "pm2", name: "neo-worker", role: "worker", active: true, canonical: true }],
+      browser: {
+        browserEnabled: true,
+        playwrightResolved: true,
+        availableProfiles: ["openclaw"],
+      },
+    });
+
+    expect(result.status).toBe("fail");
+    expect(result.blockers).toContain("browser plugin allow evidence is not proven true");
+    expect(result.blockers).toContain("browser plugin enabled evidence is not proven true");
   });
 
   it("rejects missing or wrong canonical worker ownership", () => {
@@ -71,6 +111,8 @@ describe("NEO/OpenClaw runtime ownership preflight", () => {
       owners: [{ kind: "process", name: "random-consumer", role: "worker", active: true }],
       browser: {
         browserEnabled: true,
+        browserPluginAllowed: true,
+        browserPluginEnabled: true,
         playwrightResolved: true,
         availableProfiles: ["openclaw"],
       },
@@ -83,6 +125,8 @@ describe("NEO/OpenClaw runtime ownership preflight", () => {
       owners: [{ kind: "pm2", name: "neo-worker-copy", role: "worker", active: true, canonical: true }],
       browser: {
         browserEnabled: true,
+        browserPluginAllowed: true,
+        browserPluginEnabled: true,
         playwrightResolved: true,
         availableProfiles: ["openclaw"],
       },
