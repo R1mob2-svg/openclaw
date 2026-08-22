@@ -30,6 +30,10 @@ export type RuntimeOwnershipAuditResult = {
   blockers: string[];
 };
 
+function ownerLabel(owner: RuntimeOwnerEvidence): string {
+  return `${owner.kind}:${owner.role}:${owner.name}`;
+}
+
 /**
  * Side-effect-free preflight for the canonical NEO/OpenClaw runtime lane.
  *
@@ -59,10 +63,10 @@ export function auditRuntimeOwnership(input: RuntimeOwnershipAuditInput): Runtim
     );
   }
 
-  const canonicalName = canonicalWorkers[0]?.name;
+  const canonicalWorker = canonicalWorkers.length === 1 ? canonicalWorkers[0]! : null;
   const duplicateActiveConsumers = activeConsumers
-    .filter((owner) => owner.name !== canonicalName)
-    .map((owner) => owner.name)
+    .filter((owner) => owner !== canonicalWorker)
+    .map(ownerLabel)
     .sort();
 
   if (duplicateActiveConsumers.length > 0) {
@@ -72,11 +76,11 @@ export function auditRuntimeOwnership(input: RuntimeOwnershipAuditInput): Runtim
   if (!input.browser.browserEnabled) {
     blockers.push("browser.enabled is not proven true");
   }
-  if (input.browser.browserPluginAllowed === false) {
-    blockers.push("browser plugin is excluded by plugins.allow");
+  if (input.browser.browserPluginAllowed !== true) {
+    blockers.push("browser plugin allow evidence is not proven true");
   }
-  if (input.browser.browserPluginEnabled === false) {
-    blockers.push("browser plugin entry is disabled");
+  if (input.browser.browserPluginEnabled !== true) {
+    blockers.push("browser plugin enabled evidence is not proven true");
   }
   if (!input.browser.playwrightResolved) {
     blockers.push("Playwright runtime is not resolvable from the gateway runtime");
