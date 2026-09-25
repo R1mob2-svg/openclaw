@@ -38,6 +38,7 @@ import { loadChatComposerSnapshot, restoreChatComposerState } from "./chat/compo
 import { reconcileChatRunLifecycle } from "./chat/run-lifecycle.ts";
 import { parseChatSideResult, type ChatSideResult } from "./chat/side-result.ts";
 import { formatConnectError } from "./connect-error.ts";
+import { resolveFounderAutoLaunchUrl } from "./founder-auto-launch.ts";
 import {
   recordControlUiConnectTiming,
   recordControlUiRpcTiming,
@@ -914,6 +915,18 @@ export function connectGateway(host: GatewayHost, options?: ConnectGatewayOption
       host.lastErrorCode =
         resolveGatewayErrorDetailCode(error) ??
         (typeof error?.code === "string" ? error.code : null);
+
+      const founderLaunchUrl = resolveFounderAutoLaunchUrl({
+        authErrorCode: host.lastErrorCode,
+        pageHref: typeof window !== "undefined" ? window.location?.href : null,
+        explicitToken: host.settings.token,
+        password: host.password,
+      });
+      if (founderLaunchUrl && typeof window !== "undefined") {
+        window.location.replace(founderLaunchUrl);
+        return;
+      }
+
       if (code !== 1012) {
         if (error?.message) {
           host.lastError =
