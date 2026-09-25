@@ -1,0 +1,24 @@
+FROM node:24-bookworm
+
+WORKDIR /app
+ENV NODE_ENV=production
+ENV COREPACK_HOME=/usr/local/share/corepack
+
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+RUN corepack prepare "$(node -p "require('./package.json').packageManager")" --activate
+RUN pnpm install --frozen-lockfile
+
+COPY . .
+
+RUN NODE_OPTIONS=--max-old-space-size=8192 pnpm build:docker
+RUN pnpm ui:build
+
+RUN install -d -m 0700 -o node -g node /home/node/.openclaw /home/node/.openclaw/workspace
+
+RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw && chmod 755 /app/openclaw.mjs
+
+USER node
+EXPOSE 8080
+CMD ["node","openclaw.mjs","gateway","--allow-unconfigured","--bind","lan","--port","8080"]
