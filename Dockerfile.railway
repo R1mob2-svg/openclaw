@@ -19,7 +19,8 @@ RUN corepack prepare "$(node -p "require('./package.json').packageManager")" --a
 RUN pnpm install --frozen-lockfile
 
 RUN NODE_OPTIONS=--max-old-space-size=8192 pnpm build:docker
-RUN pnpm exec vitest run src/agents/bootstrap-files-neo-brain.test.ts test/railway-neo-continuity.test.ts\nRUN pnpm --dir ui exec vitest run --config vitest.node.config.ts src/ui/founder-auto-launch.node.test.ts
+RUN pnpm exec vitest run src/agents/bootstrap-files-neo-brain.test.ts test/railway-neo-continuity.test.ts
+RUN cd ui && pnpm exec vitest run --config vitest.node.config.ts src/ui/founder-auto-launch.node.test.ts
 RUN pnpm ui:build
 
 RUN install -d -m 0700 -o node -g node /home/node/.openclaw /home/node/.openclaw/workspace
