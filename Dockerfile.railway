@@ -6,11 +6,9 @@ ENV COREPACK_HOME=/usr/local/share/corepack
 
 RUN corepack enable
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY . .
 RUN corepack prepare "$(node -p "require('./package.json').packageManager")" --activate
 RUN pnpm install --frozen-lockfile
-
-COPY . .
 
 RUN NODE_OPTIONS=--max-old-space-size=8192 pnpm build:docker
 RUN pnpm ui:build
