@@ -37,6 +37,12 @@ node openclaw.mjs config set agents.defaults.heartbeat.every "0m"
 node openclaw.mjs config set agents.defaults.model.primary "deepseek/deepseek-v4-flash"
 node openclaw.mjs config set agents.defaults.model.fallbacks "[]" --strict-json
 node openclaw.mjs config set agents.defaults.models "{\"deepseek/deepseek-v4-flash\":{}}" --strict-json --replace
+
+if [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; then
+  node openclaw.mjs config set gateway.publicOrigin "https://${RAILWAY_PUBLIC_DOMAIN}"
+  node openclaw.mjs config set gateway.controlUi.allowedOrigins "[\"https://${RAILWAY_PUBLIC_DOMAIN}\"]" --strict-json --replace
+fi
+
 node openclaw.mjs config validate
 
 exec node openclaw.mjs gateway --allow-unconfigured --bind lan --port 8080
