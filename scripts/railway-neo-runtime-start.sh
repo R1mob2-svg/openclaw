@@ -4,6 +4,24 @@ set -eu
 workspace="${OPENCLAW_WORKSPACE_DIR:-/home/node/.openclaw/workspace}"
 mkdir -p "$workspace" "$workspace/memory"
 
+profile_dir="/app/runtime/neo"
+soul="$workspace/SOUL.md"
+agents="$workspace/AGENTS.md"
+soul_backup="$workspace/memory/SOUL.before-neo-profile-2026-09-25.md"
+agents_backup="$workspace/memory/AGENTS.before-neo-operator-2026-09-25.md"
+
+# Preserve the pre-cutover runtime profile once, then make the repository profile
+# canonical on every boot. This prevents an old persistent Railway volume from
+# silently resurrecting stale personality/operator instructions.
+if [ -s "$soul" ] && [ ! -e "$soul_backup" ]; then
+  cp "$soul" "$soul_backup"
+fi
+if [ -s "$agents" ] && [ ! -e "$agents_backup" ]; then
+  cp "$agents" "$agents_backup"
+fi
+install -m 0644 "$profile_dir/SOUL.md" "$soul"
+install -m 0644 "$profile_dir/AGENTS.md" "$agents"
+
 identity="$workspace/IDENTITY.md"
 if [ ! -s "$identity" ]; then
   cat > "$identity" <<'EOF'
@@ -39,8 +57,6 @@ node openclaw.mjs config set agents.defaults.model.fallbacks "[]" --strict-json
 node openclaw.mjs config set agents.defaults.models "{\"deepseek/deepseek-v4-flash\":{}}" --strict-json --replace
 
 if [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; then
-  # This OpenClaw version has no gateway.publicOrigin key. The control UI only
-  # needs the public Railway origin in its allowed-origins list.
   node openclaw.mjs config set gateway.controlUi.allowedOrigins "[\"https://${RAILWAY_PUBLIC_DOMAIN}\"]" --strict-json --replace
 fi
 
