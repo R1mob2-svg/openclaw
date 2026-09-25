@@ -6,6 +6,14 @@ ENV COREPACK_HOME=/usr/local/share/corepack
 
 RUN corepack enable
 
+# Railway persistent volumes are mounted at container start and may arrive
+# root-owned even when the image pre-creates the mountpoint for the node user.
+# Keep a tiny privileged entrypoint solely to repair volume ownership, then
+# drop back to the non-root node user before OpenClaw starts.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gosu \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY . .
 RUN corepack prepare "$(node -p "require('./package.json').packageManager")" --activate
 RUN pnpm install --frozen-lockfile
@@ -17,6 +25,20 @@ RUN install -d -m 0700 -o node -g node /home/node/.openclaw /home/node/.openclaw
 
 RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw && chmod 755 /app/openclaw.mjs
 
-USER node
+RUN printf '%s\n' \
+  '#!/bin/sh' \
+  'set -eu' \
+  'state_dir="${OPENCLAW_STATE_DIR:-/home/node/.openclaw}"' \
+  'workspace_dir="${OPENCLAW_WORKSPACE_DIR:-$state_dir/workspace}"' \
+  'if [ "$(id -u)" -eq 0 ]; then' \
+  '  mkdir -p "$state_dir" "$workspace_dir"' \
+  '  chown -R node:node "$state_dir"' \
+  '  exec gosu node "$@"' \
+  'fi' \
+  'exec "$@"' \
+  > /usr/local/bin/openclaw-railway-entrypoint \
+  && chmod 0755 /usr/local/bin/openclaw-railway-entrypoint
+
+ENTRYPOINT ["/usr/local/bin/openclaw-railway-entrypoint"]
 EXPOSE 8080
 CMD ["node","openclaw.mjs","gateway","--allow-unconfigured","--bind","lan","--port","8080"]
