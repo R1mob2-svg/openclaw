@@ -4,6 +4,7 @@ import {
   evaluateMissingDeviceIdentity,
   isTrustedProxyControlUiOperatorAuth,
   resolveControlUiAuthPolicy,
+  shouldAutoApproveFounderControlUiPairing,
   shouldClearUnboundScopesForMissingDeviceIdentity,
   shouldSkipControlUiPairing,
 } from "./connect-policy.js";
@@ -249,6 +250,44 @@ describe("ws connect policy", () => {
       },
       "reject-device-required",
     );
+  });
+
+  test("founder Control UI auto-pair requires exact origin and already-valid token auth", () => {
+    const base = {
+      enabled: true,
+      isControlUi: true,
+      role: "operator" as const,
+      reason: "not-paired" as const,
+      authOk: true,
+      authMethod: "token",
+      requestOrigin: "https://openclaw-neo-runtime-production.up.railway.app",
+      configuredOrigin: "https://openclaw-neo-runtime-production.up.railway.app",
+      existingPairedDevice: false,
+    };
+
+    expect(shouldAutoApproveFounderControlUiPairing(base)).toBe(true);
+    expect(
+      shouldAutoApproveFounderControlUiPairing({
+        ...base,
+        requestOrigin: "https://evil.example",
+      }),
+    ).toBe(false);
+    expect(shouldAutoApproveFounderControlUiPairing({ ...base, authOk: false })).toBe(false);
+    expect(
+      shouldAutoApproveFounderControlUiPairing({ ...base, authMethod: "password" }),
+    ).toBe(false);
+    expect(
+      shouldAutoApproveFounderControlUiPairing({ ...base, role: "node" }),
+    ).toBe(false);
+    expect(
+      shouldAutoApproveFounderControlUiPairing({ ...base, reason: "scope-upgrade" }),
+    ).toBe(false);
+    expect(
+      shouldAutoApproveFounderControlUiPairing({ ...base, existingPairedDevice: true }),
+    ).toBe(false);
+    expect(
+      shouldAutoApproveFounderControlUiPairing({ ...base, enabled: false }),
+    ).toBe(false);
   });
 
   test("dangerouslyDisableDeviceAuth skips pairing for operator control-ui only", () => {

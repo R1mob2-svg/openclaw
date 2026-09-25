@@ -61,6 +61,40 @@ export function shouldSkipControlUiPairing(
   return role === "operator" && policy.allowBypass;
 }
 
+
+export function shouldAutoApproveFounderControlUiPairing(params: {
+  enabled: boolean;
+  isControlUi: boolean;
+  role: GatewayRole;
+  reason: "not-paired" | "role-upgrade" | "scope-upgrade" | "metadata-upgrade";
+  authOk: boolean;
+  authMethod?: string;
+  requestOrigin?: string;
+  configuredOrigin?: string;
+  existingPairedDevice: boolean;
+}): boolean {
+  if (
+    !params.enabled ||
+    !params.isControlUi ||
+    params.role !== "operator" ||
+    params.reason !== "not-paired" ||
+    !params.authOk ||
+    params.authMethod !== "token" ||
+    params.existingPairedDevice
+  ) {
+    return false;
+  }
+
+  const requestOrigin = params.requestOrigin?.trim().replace(/\/+$/, "").toLowerCase() ?? "";
+  const configuredOrigin =
+    params.configuredOrigin?.trim().replace(/\/+$/, "").toLowerCase() ?? "";
+  if (!requestOrigin || !configuredOrigin) {
+    return false;
+  }
+
+  return requestOrigin === configuredOrigin;
+}
+
 export function isTrustedProxyControlUiOperatorAuth(params: {
   isControlUi: boolean;
   role: GatewayRole;
