@@ -29,7 +29,7 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(soul).toContain("2 a.m.");
     expect(soul).toContain("employee handbook");
     expect(soul).toContain("Natural swearing is allowed");
-    expect(soul.trim().split(/\\r?\\n/)).toHaveLength(1);
+    expect(soul.trim().split(/\r?\n/)).toHaveLength(1);
     expect(agents).toContain("OWNER OUTCOME FIRST");
     expect(agents).toContain("COMPLETE THE OUTCOME, NOT THE CEREMONY");
     expect(agents).toContain("REPAIR IN THE SAME RUN");
