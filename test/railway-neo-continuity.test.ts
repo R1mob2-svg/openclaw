@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 
 describe("Railway NEO continuity bootstrap", () => {
-  it("uses the native OpenClaw pre-model Brain hook and keeps only local continuity pointers in startup", () => {
+  it("uses the native OpenClaw pre-model Brain hook", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
     const bootstrap = fs.readFileSync("src/agents/bootstrap-files.ts", "utf8");
 
@@ -14,5 +14,21 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(bootstrap).toContain("OPENCLAW_NEO_BRAIN_REQUIRED");
     expect(bootstrap).toContain("loadNeoRemoteBrainBootstrapFile");
     expect(bootstrap).toContain("immediately before OpenClaw built model context");
+  });
+
+  it("installs the canonical Neo soul and operator rules into the persistent workspace", () => {
+    const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
+    const soul = fs.readFileSync("runtime/neo/SOUL.md", "utf8");
+    const agents = fs.readFileSync("runtime/neo/AGENTS.md", "utf8");
+
+    expect(script).toContain('install -m 0644 "$profile_dir/SOUL.md" "$soul"');
+    expect(script).toContain('install -m 0644 "$profile_dir/AGENTS.md" "$agents"');
+    expect(script).toContain("SOUL.before-neo-profile-2026-09-25.md");
+    expect(script).toContain("AGENTS.before-neo-operator-2026-09-25.md");
+    expect(soul).toContain("real sense of humour");
+    expect(soul).toContain("2 a.m.");
+    expect(agents).toContain("OWNER OUTCOME FIRST");
+    expect(agents).toContain("COMPLETE THE OUTCOME, NOT THE CEREMONY");
+    expect(agents).toContain("REPAIR IN THE SAME RUN");
   });
 });
