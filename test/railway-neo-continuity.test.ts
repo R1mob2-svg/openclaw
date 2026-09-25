@@ -16,6 +16,18 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(bootstrap).toContain("immediately before OpenClaw built model context");
   });
 
+  it("registers the Railway DeepSeek model through the GeminX provider bridge without copying the DeepSeek secret", () => {
+    const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
+
+    expect(script).toContain("OPENCLAW_MODEL_PROXY_BASE_URL");
+    expect(script).toContain('models.providers.deepseek');
+    expect(script).toContain('"OPENCLAW_GATEWAY_TOKEN"');
+    expect(script).toContain('"deepseek-v4-flash"');
+    expect(script).toContain('"deepseek-v4-pro"');
+    expect(script).toContain('"openai-completions"');
+    expect(script).not.toContain("DEEPSEEK_API_KEY");
+  });
+
   it("installs the canonical Neo soul and operator rules into the persistent workspace", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
     const soul = fs.readFileSync("runtime/neo/SOUL.md", "utf8");

@@ -56,6 +56,45 @@ node openclaw.mjs config set agents.defaults.model.primary "deepseek/deepseek-v4
 node openclaw.mjs config set agents.defaults.model.fallbacks "[]" --strict-json
 node openclaw.mjs config set agents.defaults.models "{\"deepseek/deepseek-v4-flash\":{}}" --strict-json --replace
 
+if [ -z "${OPENCLAW_MODEL_PROXY_BASE_URL:-}" ]; then
+  echo "OPENCLAW_MODEL_PROXY_BASE_URL is required for the Railway DeepSeek provider bridge" >&2
+  exit 1
+fi
+
+deepseek_provider_json="$(
+  node - <<'NODE'
+const baseUrl = process.env.OPENCLAW_MODEL_PROXY_BASE_URL?.trim().replace(/\/+$/, "");
+if (!baseUrl) process.exit(2);
+const common = {
+  reasoning: true,
+  input: ["text"],
+  contextWindow: 1000000,
+  maxTokens: 384000,
+  cost: { input: 0.14, output: 0.28, cacheRead: 0.028, cacheWrite: 0 },
+  compat: {
+    supportsUsageInStreaming: true,
+    supportsReasoningEffort: true,
+    maxTokensField: "max_tokens"
+  }
+};
+process.stdout.write(JSON.stringify({
+  baseUrl,
+  apiKey: { source: "env", provider: "default", id: "OPENCLAW_GATEWAY_TOKEN" },
+  api: "openai-completions",
+  models: [
+    { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", ...common },
+    {
+      id: "deepseek-v4-pro",
+      name: "DeepSeek V4 Pro",
+      ...common,
+      cost: { input: 1.74, output: 3.48, cacheRead: 0.145, cacheWrite: 0 }
+    }
+  ]
+}));
+NODE
+)"
+node openclaw.mjs config set models.providers.deepseek "$deepseek_provider_json" --strict-json --replace
+
 if [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; then
   node openclaw.mjs config set gateway.controlUi.allowedOrigins "[\"https://${RAILWAY_PUBLIC_DOMAIN}\"]" --strict-json --replace
 fi
