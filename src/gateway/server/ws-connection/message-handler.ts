@@ -154,6 +154,7 @@ import {
   evaluateMissingDeviceIdentity,
   isTrustedProxyControlUiOperatorAuth,
   resolveControlUiAuthPolicy,
+  shouldAutoApproveFounderControlUiPairing,
   shouldClearUnboundScopesForMissingDeviceIdentity,
   shouldSkipControlUiPairing,
 } from "./connect-policy.js";
@@ -1266,6 +1267,21 @@ export function attachGatewayWsMessageHandler(params: GatewayWsMessageHandlerPar
                 autoApproveCidrs: configSnapshot.gateway?.nodes?.pairing?.autoApproveCidrs,
               },
             );
+            const railwayPublicDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
+            const founderAutoPairOrigin =
+              process.env.OPENCLAW_FOUNDER_AUTO_PAIR_ORIGIN?.trim() ||
+              (railwayPublicDomain ? `https://${railwayPublicDomain}` : "");
+            const allowSilentFounderControlUiPairing = shouldAutoApproveFounderControlUiPairing({
+              enabled: process.env.OPENCLAW_FOUNDER_AUTO_PAIR === "1",
+              isControlUi,
+              role,
+              reason,
+              authOk,
+              authMethod,
+              requestOrigin,
+              configuredOrigin: founderAutoPairOrigin,
+              existingPairedDevice: Boolean(existingPairedDevice),
+            });
             const boundBootstrapProfile =
               authMethod === "bootstrap-token" &&
               bootstrapTokenCandidate &&
@@ -1317,6 +1333,7 @@ export function attachGatewayWsMessageHandler(params: GatewayWsMessageHandlerPar
                   ? false
                   : allowSilentLocalPairing ||
                     allowSilentTrustedCidrsNodePairing ||
+                    allowSilentFounderControlUiPairing ||
                     allowSilentBootstrapPairing,
             });
             const context = buildRequestContext();
