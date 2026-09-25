@@ -27,6 +27,8 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).toContain("AGENTS.before-neo-operator-2026-09-25.md");
     expect(soul).toContain("real sense of humour");
     expect(soul).toContain("2 a.m.");
+    expect(soul).toContain("ordinary conversation");
+    expect(soul).toContain("Never use canned acknowledgement scripts");
     expect(agents).toContain("OWNER OUTCOME FIRST");
     expect(agents).toContain("COMPLETE THE OUTCOME, NOT THE CEREMONY");
     expect(agents).toContain("REPAIR IN THE SAME RUN");
