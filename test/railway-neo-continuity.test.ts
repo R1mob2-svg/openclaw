@@ -28,6 +28,14 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).not.toContain("DEEPSEEK_API_KEY");
   });
 
+  it("keeps Railway NEO memory recall available without requiring an OpenAI embedding key", () => {
+    const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
+
+    expect(script).toContain('agents.defaults.memorySearch.provider "none"');
+    expect(script).toContain("lexical FTS-only mode");
+    expect(script).not.toContain("OPENAI_API_KEY");
+  });
+
   it("installs the canonical Neo soul and operator rules into the persistent workspace", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
     const soul = fs.readFileSync("runtime/neo/SOUL.md", "utf8");
