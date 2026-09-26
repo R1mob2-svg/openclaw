@@ -55,6 +55,10 @@ node openclaw.mjs config set agents.defaults.heartbeat.every "0m"
 node openclaw.mjs config set agents.defaults.model.primary "deepseek/deepseek-v4-flash"
 node openclaw.mjs config set agents.defaults.model.fallbacks "[]" --strict-json
 node openclaw.mjs config set agents.defaults.models "{\"deepseek/deepseek-v4-flash\":{}}" --strict-json --replace
+# The Railway NEO runtime intentionally carries no OpenAI embedding credential.
+# Keep memory_search useful without noisy startup/auth failures by selecting
+# OpenClaw's deliberate lexical FTS-only mode instead of the default OpenAI provider.
+node openclaw.mjs config set agents.defaults.memorySearch.provider "none"
 
 if [ -z "${OPENCLAW_MODEL_PROXY_BASE_URL:-}" ]; then
   echo "OPENCLAW_MODEL_PROXY_BASE_URL is required for the Railway DeepSeek provider bridge" >&2
