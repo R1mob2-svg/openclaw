@@ -24,6 +24,7 @@ import {
 import { persistChatComposerState, restoreChatComposerState } from "./chat/composer-persistence.ts";
 import { startControlUiResponsivenessObserver } from "./control-ui-performance.ts";
 import { loadControlUiBootstrapConfig } from "./controllers/control-ui-bootstrap.ts";
+import { resolveFounderInitialLaunchUrl } from "./founder-auto-launch.ts";
 import type { Tab } from "./navigation.ts";
 import type { ChatQueueItem } from "./ui-types.ts";
 
@@ -53,7 +54,8 @@ type LifecycleHost = {
   allowExternalEmbedUrls: boolean;
   chatHasAutoScrolled: boolean;
   chatManualRefreshInFlight: boolean;
-  settings?: { gatewayUrl?: string | null };
+  settings?: { gatewayUrl?: string | null; token?: string | null };
+  password?: string | null;
   sessionKey: string;
   chatMessage: string;
   chatQueue: ChatQueueItem[];
@@ -98,6 +100,17 @@ export function handleConnected(host: LifecycleHost) {
   const connectGeneration = ++host.connectGeneration;
   host.basePath = inferBasePath();
   applySettingsFromUrl(host as unknown as Parameters<typeof applySettingsFromUrl>[0]);
+
+  const founderLaunchUrl = resolveFounderInitialLaunchUrl({
+    pageHref: typeof window !== "undefined" ? window.location?.href : null,
+    explicitToken: host.settings?.token,
+    password: host.password,
+  });
+  if (founderLaunchUrl && typeof window !== "undefined") {
+    window.location.replace(founderLaunchUrl);
+    return;
+  }
+
   host.controlUiBootstrapReady = loadControlUiBootstrapConfig(
     host as unknown as Parameters<typeof loadControlUiBootstrapConfig>[0],
     { applyIdentity: false },
