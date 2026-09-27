@@ -25,6 +25,7 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).toContain('"deepseek-v4-flash"');
     expect(script).toContain('"deepseek-v4-pro"');
     expect(script).toContain('"openai-completions"');
+    expect(script).toContain("authHeader: true");
     expect(script).not.toContain("DEEPSEEK_API_KEY");
   });
 

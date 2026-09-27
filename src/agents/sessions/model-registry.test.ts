@@ -130,6 +130,30 @@ describe("ModelRegistry models.json auth", () => {
     });
   });
 
+  it("builds an explicit bearer header for custom proxy providers when requested", async () => {
+    const modelsPath = writeModelsJson({
+      providers: {
+        deepseek: {
+          baseUrl: "https://proxy.example/v1",
+          api: "openai-completions",
+          apiKey: "test-proxy-token",
+          authHeader: true,
+          models: [{ id: "deepseek-v4-flash", name: "DeepSeek V4 Flash" }],
+        },
+      },
+    });
+
+    const registry = ModelRegistry.create(AuthStorage.inMemory(), modelsPath);
+    const model = registry.find("deepseek", "deepseek-v4-flash");
+
+    expect(model).toBeDefined();
+    await expect(registry.getApiKeyAndHeaders(model!)).resolves.toEqual({
+      ok: true,
+      apiKey: "test-proxy-token",
+      headers: { Authorization: "Bearer test-proxy-token" },
+    });
+  });
+
   it("still rejects api-key custom models without apiKey", () => {
     const modelsPath = writeModelsJson({
       providers: {
