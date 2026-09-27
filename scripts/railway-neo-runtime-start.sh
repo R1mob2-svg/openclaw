@@ -108,6 +108,11 @@ if [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; then
   node openclaw.mjs config set gateway.controlUi.allowedOrigins "[\"https://${RAILWAY_PUBLIC_DOMAIN}\"]" --strict-json --replace
 fi
 
+# GeminX Founder HQ is another trusted operator surface for this exact NEO runtime.
+# Expose OpenClaw's authenticated agent-first HTTP bridge so HQ can reuse the same
+# agent/session instead of running a second NEO personality beside it.
+node openclaw.mjs config set gateway.http.endpoints.chatCompletions.enabled "true" --strict-json
+
 node openclaw.mjs config validate
 
 exec node openclaw.mjs gateway --allow-unconfigured --bind lan --port 8080
