@@ -68,7 +68,6 @@ node openclaw.mjs config set agents.defaults.models "{\"deepseek/deepseek-v4-fla
 # NEO context self-heal profile.
 # Compact long active transcripts before transport/model limits are threatened,
 # retain a useful recent tail, and re-check pressure between tool turns.
-node openclaw.mjs config set agents.defaults.compaction.enabled "true" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.reserveTokens "100000" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.keepRecentTokens "60000" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.maxActiveTranscriptBytes "\"8mb\"" --strict-json
