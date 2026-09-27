@@ -8,6 +8,8 @@ describe("GeminX Device Operator OpenClaw bridge", () => {
 
     expect(manifest).toContain('"id": "geminx-device-operator"');
     expect(manifest).toContain('"enabledByDefault": true');
+    expect(manifest).toContain('"tools": [');
+    expect(manifest).toContain('"geminx_device"');
     expect(plugin).toContain('name: "geminx_device"');
     expect(plugin).toContain("api.registerTool");
     expect(plugin).toContain("OPENCLAW_GEMINX_DEVICE_BRIDGE_URL");
