@@ -28,6 +28,14 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).not.toContain("DEEPSEEK_API_KEY");
   });
 
+  it("exposes the same Railway NEO agent to trusted GeminX Founder HQ through the native agent HTTP path", () => {
+    const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
+
+    expect(script).toContain("gateway.http.endpoints.chatCompletions.enabled true");
+    expect(script).toContain("same NEO runtime");
+    expect(script).toContain("Gateway auth remains required");
+  });
+
   it("keeps Railway NEO memory recall available without requiring an OpenAI embedding key", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
