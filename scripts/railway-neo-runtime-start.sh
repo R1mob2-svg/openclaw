@@ -59,6 +59,9 @@ node openclaw.mjs config set agents.defaults.models "{\"deepseek/deepseek-v4-fla
 # Keep memory_search useful without noisy startup/auth failures by selecting
 # OpenClaw's deliberate lexical FTS-only mode instead of the default OpenAI provider.
 node openclaw.mjs config set agents.defaults.memorySearch.provider "none"
+# GeminX Founder HQ is another trusted surface for this same NEO runtime.
+# Expose OpenClaw's native agent HTTP endpoint server-side; Gateway auth remains required.
+node openclaw.mjs config set gateway.http.endpoints.chatCompletions.enabled true
 
 if [ -z "${OPENCLAW_MODEL_PROXY_BASE_URL:-}" ]; then
   echo "OPENCLAW_MODEL_PROXY_BASE_URL is required for the Railway DeepSeek provider bridge" >&2
