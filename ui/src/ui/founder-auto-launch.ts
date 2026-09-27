@@ -31,4 +31,11 @@ export function resolveFounderAutoLaunchUrl(input: FounderAutoLaunchInput): stri
   return NEO_FOUNDER_LAUNCH_URL;
 }
 
+export function resolveFounderInitialLaunchUrl(input: Omit<FounderAutoLaunchInput, "authErrorCode">): string | null {
+  return resolveFounderAutoLaunchUrl({
+    ...input,
+    authErrorCode: "AUTH_TOKEN_MISSING",
+  });
+}
+
 export { NEO_FOUNDER_LAUNCH_URL, NEO_RAILWAY_CONTROL_UI_HOST };
