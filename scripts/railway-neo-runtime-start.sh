@@ -65,6 +65,17 @@ node openclaw.mjs config set agents.defaults.memorySearch.provider "none"
 node openclaw.mjs config set gateway.http.endpoints.chatCompletions.enabled true
 node openclaw.mjs config set agents.defaults.models "{\"deepseek/deepseek-v4-flash\":{},\"deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
 
+# NEO context self-heal profile.
+# Compact long active transcripts before transport/model limits are threatened,
+# retain a useful recent tail, and re-check pressure between tool turns.
+node openclaw.mjs config set agents.defaults.compaction.enabled "true" --strict-json
+node openclaw.mjs config set agents.defaults.compaction.reserveTokens "100000" --strict-json
+node openclaw.mjs config set agents.defaults.compaction.keepRecentTokens "60000" --strict-json
+node openclaw.mjs config set agents.defaults.compaction.maxActiveTranscriptBytes "\"8mb\"" --strict-json
+node openclaw.mjs config set agents.defaults.compaction.truncateAfterCompaction "true" --strict-json
+node openclaw.mjs config set agents.defaults.compaction.midTurnPrecheck.enabled "true" --strict-json
+node openclaw.mjs config set agents.defaults.compaction.notifyUser "false" --strict-json
+
 if [ -z "${OPENCLAW_MODEL_PROXY_BASE_URL:-}" ]; then
   echo "OPENCLAW_MODEL_PROXY_BASE_URL is required for the Railway DeepSeek provider bridge" >&2
   exit 1
