@@ -133,6 +133,29 @@ describe("admin-http-rpc plugin handler", () => {
     },
   );
 
+  it.each([
+    ["sessions.list", { limit: 20, configuredAgentsOnly: true }],
+    ["sessions.compact", { key: "agent:main:main", maxLines: 1200 }],
+    ["sessions.reset", { key: "agent:main:main", reason: "reset" }],
+  ] as const)(
+    "allows bounded session maintenance method %s",
+    async (method, params) => {
+      dispatchGatewayMethod.mockResolvedValueOnce({
+        ok: true,
+        payload: { ok: true, key: "agent:main:main" },
+      });
+
+      const result = await invoke({
+        id: "session-maintenance",
+        method,
+        params,
+      });
+
+      expect(dispatchGatewayMethod).toHaveBeenCalledWith(method, params);
+      expect(result.captured.statusCode).toBe(200);
+    },
+  );
+
   it("rejects methods outside the admin HTTP RPC allowlist", async () => {
     const result = await invoke({ id: "bad", method: "sessions.send" });
 
