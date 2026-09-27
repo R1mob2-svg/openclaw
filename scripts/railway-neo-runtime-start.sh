@@ -113,6 +113,11 @@ fi
 # agent/session instead of running a second NEO personality beside it.
 node openclaw.mjs config set gateway.http.endpoints.chatCompletions.enabled "true" --strict-json
 
+# Enable OpenClaw's bundled authenticated admin HTTP RPC for trusted GeminX/Cloud AG
+# health checks and bounded gateway restart requests. This reuses the existing
+# gateway bearer auth and does not expose an unauthenticated repair surface.
+node openclaw.mjs plugins enable admin-http-rpc
+
 node openclaw.mjs config validate
 
 exec node openclaw.mjs gateway --allow-unconfigured --bind lan --port 8080
