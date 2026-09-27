@@ -36,6 +36,13 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).toContain("Founder HQ is another trusted client surface for this same NEO runtime");
   });
 
+  it("exposes the authenticated agent HTTP bridge for GeminX HQ to reuse the same NEO runtime", () => {
+    const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
+
+    expect(script).toContain('gateway.http.endpoints.chatCompletions.enabled "true" --strict-json');
+    expect(script).toContain("another trusted operator surface for this exact NEO runtime");
+  });
+
   it("keeps Railway NEO memory recall available without requiring an OpenAI embedding key", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
