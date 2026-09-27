@@ -1,0 +1,14 @@
+{
+  "id": "geminx-device-operator",
+  "activation": {
+    "onStartup": true
+  },
+  "enabledByDefault": true,
+  "name": "GeminX Device Operator",
+  "description": "Expose the canonical GeminX paired-device broker to NEO without creating a second device control plane.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
