@@ -99,6 +99,10 @@ const common = {
 process.stdout.write(JSON.stringify({
   baseUrl,
   apiKey: { source: "env", provider: "default", id: "OPENCLAW_GATEWAY_TOKEN" },
+  // Normal interactive turns can let the OpenAI-compatible client derive auth
+  // from apiKey, but compaction resolves request credentials separately through
+  // ModelRegistry. Make the shared GeminX proxy bearer explicit for both paths.
+  authHeader: true,
   api: "openai-completions",
   models: [
     { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", ...common },
