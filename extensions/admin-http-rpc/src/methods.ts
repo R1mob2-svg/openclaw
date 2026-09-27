@@ -24,6 +24,7 @@ const ADMIN_HTTP_RPC_ALLOWED_METHOD_GROUPS = {
   web: ["web.login.start", "web.login.wait"],
   models: ["models.list", "models.authStatus"],
   agents: ["agents.list", "agents.create", "agents.update", "agents.delete"],
+  sessions: ["sessions.list", "sessions.compact", "sessions.reset"],
   approvals: [
     "exec.approvals.get",
     "exec.approvals.set",

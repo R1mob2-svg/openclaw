@@ -43,6 +43,18 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).toContain("another trusted operator surface for this exact NEO runtime");
   });
 
+  it("preemptively compacts long Railway NEO sessions before transport or provider overflow", () => {
+    const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
+
+    expect(script).toContain('agents.defaults.compaction.enabled "true"');
+    expect(script).toContain('agents.defaults.compaction.reserveTokens "100000"');
+    expect(script).toContain('agents.defaults.compaction.keepRecentTokens "60000"');
+    expect(script).toContain('agents.defaults.compaction.maxActiveTranscriptBytes "\\"8mb\\""');
+    expect(script).toContain('agents.defaults.compaction.truncateAfterCompaction "true"');
+    expect(script).toContain('agents.defaults.compaction.midTurnPrecheck.enabled "true"');
+    expect(script).toContain('agents.defaults.compaction.notifyUser "false"');
+  });
+
   it("keeps Railway NEO memory recall available without requiring an OpenAI embedding key", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
