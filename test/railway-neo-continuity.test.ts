@@ -29,6 +29,14 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).not.toContain("DEEPSEEK_API_KEY");
   });
 
+  it("isolates the GeminX DeepSeek proxy from persisted direct DeepSeek credentials", () => {
+    const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
+
+    expect(script).toContain('agents.defaults.model.primary "geminx-deepseek/deepseek-v4-flash"');
+    expect(script).toContain("models.providers.geminx-deepseek");
+    expect(script).not.toContain('agents.defaults.model.primary "deepseek/deepseek-v4-flash"');
+  });
+
   it("pins Railway Gateway auth to the runtime token instead of a stale persisted literal", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
