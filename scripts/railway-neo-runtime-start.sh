@@ -52,7 +52,7 @@ fi
 
 node openclaw.mjs config set agents.defaults.workspace "$workspace"
 node openclaw.mjs config set agents.defaults.heartbeat.every "0m"
-node openclaw.mjs config set agents.defaults.model.primary "geminx-deepseek/deepseek-v4-flash"
+node openclaw.mjs config set agents.defaults.model.primary "geminx-deepseek/geminx-native-neo"
 node openclaw.mjs config set agents.defaults.model.fallbacks "[]" --strict-json
 node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-v4-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
 # The Railway NEO runtime intentionally carries no OpenAI embedding credential.
