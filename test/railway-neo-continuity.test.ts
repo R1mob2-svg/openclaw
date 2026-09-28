@@ -29,6 +29,16 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).not.toContain("DEEPSEEK_API_KEY");
   });
 
+  it("pins Railway Gateway auth to the runtime token instead of a stale persisted literal", () => {
+    const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
+
+    expect(script).toContain('gateway.auth.mode "token"');
+    expect(script).toContain(
+      'gateway.auth.token \'{"source":"env","provider":"default","id":"OPENCLAW_GATEWAY_TOKEN"}\' --strict-json --replace',
+    );
+    expect(script).not.toContain("config set gateway.auth.token \"$OPENCLAW_GATEWAY_TOKEN\"");
+  });
+
   it("exposes the same NEO runtime to trusted GeminX Founder HQ chat", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
