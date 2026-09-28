@@ -50,13 +50,15 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).not.toContain("config set gateway.auth.token \"$OPENCLAW_GATEWAY_TOKEN\"");
   });
 
-  it("exposes the same NEO runtime to trusted GeminX Founder HQ chat", () => {
+  it("keeps OpenClaw as a full NEO runtime instead of bypassing its native tool loop", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
     expect(script).toContain('gateway.http.endpoints.chatCompletions.enabled true');
-    expect(script).toContain('agents.defaults.models "{\\\"geminx-deepseek/geminx-native-neo\\\":{},\\\"geminx-deepseek/deepseek-v4-flash\\\":{},\\\"geminx-deepseek/deepseek-v4-pro\\\":{}}"');
-    expect(script).toContain("OpenClaw is a trusted client shell for GeminX-native NEO");
-    expect(script).toContain("HQ never depends on this gateway");
+    expect(script).toContain('agents.defaults.model.primary "geminx-deepseek/deepseek-v4-flash"');
+    expect(script).toContain('agents.defaults.models "{\\\"geminx-deepseek/deepseek-v4-flash\\\":{},\\\"geminx-deepseek/deepseek-v4-pro\\\":{}}"');
+    expect(script).toContain("OpenClaw is a full NEO execution runtime with its own native tool loop");
+    expect(script).toContain("GeminX provides the authenticated DeepSeek transport");
+    expect(script).not.toContain("geminx-native-neo");
   });
 
   it("keeps the authenticated OpenClaw agent HTTP bridge without making HQ depend on it", () => {
