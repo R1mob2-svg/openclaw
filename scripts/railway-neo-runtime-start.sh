@@ -63,6 +63,11 @@ node openclaw.mjs config set agents.defaults.memorySearch.provider "none"
 # Enable OpenClaw's native agent HTTP compatibility endpoint so GeminX can
 # share NEO identity/session continuity instead of running a separate clone.
 node openclaw.mjs config set gateway.http.endpoints.chatCompletions.enabled true
+# Railway can retain an older literal gateway.auth.token on the persistent volume.
+# Make the runtime environment variable the canonical auth source on every boot
+# without persisting the secret value itself in openclaw.json.
+node openclaw.mjs config set gateway.auth.mode "token"
+node openclaw.mjs config set gateway.auth.token '{"source":"env","provider":"default","id":"OPENCLAW_GATEWAY_TOKEN"}' --strict-json --replace
 node openclaw.mjs config set agents.defaults.models "{\"deepseek/deepseek-v4-flash\":{},\"deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
 
 # NEO context self-heal profile.
