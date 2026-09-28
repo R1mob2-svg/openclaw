@@ -52,9 +52,9 @@ fi
 
 node openclaw.mjs config set agents.defaults.workspace "$workspace"
 node openclaw.mjs config set agents.defaults.heartbeat.every "0m"
-node openclaw.mjs config set agents.defaults.model.primary "deepseek/deepseek-v4-flash"
+node openclaw.mjs config set agents.defaults.model.primary "geminx-deepseek/deepseek-v4-flash"
 node openclaw.mjs config set agents.defaults.model.fallbacks "[]" --strict-json
-node openclaw.mjs config set agents.defaults.models "{\"deepseek/deepseek-v4-flash\":{}}" --strict-json --replace
+node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-v4-flash\":{}}" --strict-json --replace
 # The Railway NEO runtime intentionally carries no OpenAI embedding credential.
 # Keep memory_search useful without noisy startup/auth failures by selecting
 # OpenClaw's deliberate lexical FTS-only mode instead of the default OpenAI provider.
@@ -68,7 +68,7 @@ node openclaw.mjs config set gateway.http.endpoints.chatCompletions.enabled true
 # without persisting the secret value itself in openclaw.json.
 node openclaw.mjs config set gateway.auth.mode "token"
 node openclaw.mjs config set gateway.auth.token '{"source":"env","provider":"default","id":"OPENCLAW_GATEWAY_TOKEN"}' --strict-json --replace
-node openclaw.mjs config set agents.defaults.models "{\"deepseek/deepseek-v4-flash\":{},\"deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
+node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-v4-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
 
 # NEO context self-heal profile.
 # Compact long active transcripts before transport/model limits are threatened,
@@ -121,7 +121,11 @@ process.stdout.write(JSON.stringify({
 }));
 NODE
 )"
-node openclaw.mjs config set models.providers.deepseek "$deepseek_provider_json" --strict-json --replace
+# Use a dedicated provider namespace for the GeminX-authenticated DeepSeek proxy.
+# The generic "deepseek" provider may have a persisted direct DeepSeek credential
+# in AuthStorage; AuthStorage outranks models.json apiKey resolution and would send
+# that provider key to the GeminX proxy instead of the shared proxy bearer.
+node openclaw.mjs config set models.providers.geminx-deepseek "$deepseek_provider_json" --strict-json --replace
 
 if [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; then
   node openclaw.mjs config set gateway.controlUi.allowedOrigins "[\"https://${RAILWAY_PUBLIC_DOMAIN}\"]" --strict-json --replace
