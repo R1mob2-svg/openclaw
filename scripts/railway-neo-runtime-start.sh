@@ -54,7 +54,7 @@ node openclaw.mjs config set agents.defaults.workspace "$workspace"
 node openclaw.mjs config set agents.defaults.heartbeat.every "0m"
 node openclaw.mjs config set agents.defaults.model.primary "geminx-deepseek/deepseek-v4-flash"
 node openclaw.mjs config set agents.defaults.model.fallbacks "[]" --strict-json
-node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/geminx-native-neo\":{},\"geminx-deepseek/deepseek-v4-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
+node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-v4-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
 # The Railway NEO runtime intentionally carries no OpenAI embedding credential.
 # Keep memory_search useful without noisy startup/auth failures by selecting
 # OpenClaw's deliberate lexical FTS-only mode instead of the default OpenAI provider.
@@ -112,15 +112,6 @@ process.stdout.write(JSON.stringify({
   authHeader: true,
   api: "openai-completions",
   models: [
-    {
-      id: "geminx-native-neo",
-      name: "GeminX Native NEO",
-      ...common,
-      reasoning: false,
-      // Kept available only as an emergency diagnostic model. The Founder-facing
-      // NEO identity/session is owned by OpenClaw main, as it was before the native cutover.
-      cost: { input: 0.14, output: 0.28, cacheRead: 0.028, cacheWrite: 0 }
-    },
     { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", ...common },
     {
       id: "deepseek-v4-pro",
