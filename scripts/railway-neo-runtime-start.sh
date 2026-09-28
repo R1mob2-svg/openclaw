@@ -52,23 +52,24 @@ fi
 
 node openclaw.mjs config set agents.defaults.workspace "$workspace"
 node openclaw.mjs config set agents.defaults.heartbeat.every "0m"
-node openclaw.mjs config set agents.defaults.model.primary "geminx-deepseek/geminx-native-neo"
-node openclaw.mjs config set agents.defaults.model.fallbacks "[]" --strict-json
-node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/geminx-native-neo\":{},\"geminx-deepseek/deepseek-v4-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
+node openclaw.mjs config set agents.defaults.model.primary "geminx-deepseek/deepseek-v4-flash"
+node openclaw.mjs config set agents.defaults.model.fallbacks "[\"geminx-deepseek/deepseek-v4-pro\"]" --strict-json
+node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-v4-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
 # The Railway NEO runtime intentionally carries no OpenAI embedding credential.
 # Keep memory_search useful without noisy startup/auth failures by selecting
 # OpenClaw's deliberate lexical FTS-only mode instead of the default OpenAI provider.
 node openclaw.mjs config set agents.defaults.memorySearch.provider "none"
-# OpenClaw is a trusted client shell for GeminX-native NEO, not the continuity authority.
-# Keep OpenClaw's agent HTTP endpoint available for diagnostics/backwards-compatible clients,
-# while normal Founder turns travel through the geminx-native-neo model proxy.
+# OpenClaw is a full NEO execution runtime with its own native tool loop.
+# GeminX provides the authenticated DeepSeek transport, while the canonical Brain
+# provides identity/continuity. Do not route the default OpenClaw agent through
+# the GeminX-native NEO completion path, because that bypasses OpenClaw exec/files/process/browser tools.
 node openclaw.mjs config set gateway.http.endpoints.chatCompletions.enabled true
 # Railway can retain an older literal gateway.auth.token on the persistent volume.
 # Make the runtime environment variable the canonical auth source on every boot
 # without persisting the secret value itself in openclaw.json.
 node openclaw.mjs config set gateway.auth.mode "token"
 node openclaw.mjs config set gateway.auth.token '{"source":"env","provider":"default","id":"OPENCLAW_GATEWAY_TOKEN"}' --strict-json --replace
-node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/geminx-native-neo\":{},\"geminx-deepseek/deepseek-v4-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
+node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-v4-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
 
 # NEO context self-heal profile.
 # Compact long active transcripts before transport/model limits are threatened,
@@ -112,7 +113,6 @@ process.stdout.write(JSON.stringify({
   authHeader: true,
   api: "openai-completions",
   models: [
-    { id: "geminx-native-neo", name: "GeminX Native NEO", ...common, reasoning: false },
     { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", ...common },
     {
       id: "deepseek-v4-pro",
@@ -134,8 +134,8 @@ if [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; then
   node openclaw.mjs config set gateway.controlUi.allowedOrigins "[\"https://${RAILWAY_PUBLIC_DOMAIN}\"]" --strict-json --replace
 fi
 
-# Keep OpenClaw's authenticated agent-first HTTP bridge for diagnostics and legacy clients.
-# Canonical Founder conversation/state belongs to GeminX-native NEO; HQ never depends on this gateway.
+# Keep OpenClaw's authenticated agent-first HTTP bridge for direct NEO execution and diagnostics.
+# GeminX may delegate bounded work here, but GeminX HQ does not depend on this gateway for its own availability.
 node openclaw.mjs config set gateway.http.endpoints.chatCompletions.enabled "true" --strict-json
 
 # Enable OpenClaw's bundled authenticated admin HTTP RPC for trusted GeminX/Cloud AG
