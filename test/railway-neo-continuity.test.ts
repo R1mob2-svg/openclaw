@@ -58,11 +58,14 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).toContain("HQ never depends on this gateway");
   });
 
-  it("exposes the authenticated agent HTTP bridge for GeminX HQ to reuse the same NEO runtime", () => {
+  it("keeps the authenticated OpenClaw agent HTTP bridge without making HQ depend on it", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
     expect(script).toContain('gateway.http.endpoints.chatCompletions.enabled "true" --strict-json');
-    expect(script).toContain("another trusted operator surface for this exact NEO runtime");
+    expect(script).toContain("OpenClaw is a trusted client shell for GeminX-native NEO");
+    expect(script).toContain("Canonical Founder conversation/state belongs to GeminX-native NEO");
+    expect(script).toContain("HQ never depends on this gateway");
+    expect(script).not.toContain("another trusted operator surface for this exact NEO runtime");
   });
 
   it("preemptively compacts long Railway NEO sessions before transport or provider overflow", () => {
