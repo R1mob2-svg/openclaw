@@ -156,6 +156,34 @@ describe("admin-http-rpc plugin handler", () => {
     },
   );
 
+  it("allows governed node.invoke through the authenticated admin RPC surface", async () => {
+    dispatchGatewayMethod.mockResolvedValueOnce({
+      ok: true,
+      payload: { ok: true, nodeId: "founder-node", command: "system.run" },
+    });
+
+    const params = {
+      nodeId: "founder-node",
+      command: "system.run",
+      params: {
+        command: ["node", "--version"],
+        agentId: "neo",
+        sessionKey: "neo-dual-runtime-convergence-20260928",
+      },
+      timeoutMs: 15000,
+      idempotencyKey: "neo-dual-runtime-convergence-20260928:probe-1",
+    };
+    const result = await invoke({ id: "node-invoke", method: "node.invoke", params });
+
+    expect(dispatchGatewayMethod).toHaveBeenCalledWith("node.invoke", params);
+    expect(result.captured.statusCode).toBe(200);
+    expect(result.json).toEqual({
+      id: "node-invoke",
+      ok: true,
+      payload: { ok: true, nodeId: "founder-node", command: "system.run" },
+    });
+  });
+
   it("rejects methods outside the admin HTTP RPC allowlist", async () => {
     const result = await invoke({ id: "bad", method: "sessions.send" });
 
