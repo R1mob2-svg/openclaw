@@ -20,7 +20,7 @@ describe("Railway NEO continuity bootstrap", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
     expect(script).toContain("OPENCLAW_MODEL_PROXY_BASE_URL");
-    expect(script).toContain('models.providers.deepseek');
+    expect(script).toContain('models.providers.geminx-deepseek');
     expect(script).toContain('"OPENCLAW_GATEWAY_TOKEN"');
     expect(script).toContain('"deepseek-v4-flash"');
     expect(script).toContain('"deepseek-v4-pro"');
@@ -51,7 +51,7 @@ describe("Railway NEO continuity bootstrap", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
     expect(script).toContain('gateway.http.endpoints.chatCompletions.enabled true');
-    expect(script).toContain('agents.defaults.models "{\\\"deepseek/deepseek-v4-flash\\\":{},\\\"deepseek/deepseek-v4-pro\\\":{}}"');
+    expect(script).toContain('agents.defaults.models "{\\\"geminx-deepseek/deepseek-v4-flash\\\":{},\\\"geminx-deepseek/deepseek-v4-pro\\\":{}}"');
     expect(script).toContain("Founder HQ is another trusted client surface for this same NEO runtime");
   });
 
