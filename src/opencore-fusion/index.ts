@@ -9,3 +9,4 @@ export * from "./approval-envelope.js";
 export * from "./capability-grants.js";
 export * from "./operator-projection.js";
 export * from "./recovery.js";
+export * from "./runtime-ownership-audit.js";
