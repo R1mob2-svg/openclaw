@@ -45,6 +45,7 @@ const ADMIN_HTTP_RPC_ALLOWED_METHOD_GROUPS = {
   nodes: [
     "node.list",
     "node.describe",
+    "node.invoke",
     "node.pair.list",
     "node.pair.approve",
     "node.pair.reject",
