@@ -109,5 +109,8 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(agents).toContain("COMPLETE THE OUTCOME, NOT THE CEREMONY");
     expect(agents).toContain("REPAIR IN THE SAME RUN");
     expect(agents).toContain("PROFILE FIDELITY");
+    expect(agents).toContain("DeepSeek V4.1 Flash as the default");
+    expect(agents).toContain("geminx-deepseek/deepseek-v4-pro");
+    expect(agents).toContain("Do not treat transport, auth, timeout, rate-limit or billing failure as evidence");
   });
 });
