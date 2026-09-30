@@ -46,6 +46,28 @@ describe("extra-params: DeepSeek V4 OpenAI-compatible thinking fallback", () => 
     expect(payload.reasoning_effort).toBe("high");
   });
 
+  it("injects deepseek-native thinking for the canonical deepseek-flash alias", () => {
+    const payload = runExtraParamsCase({
+      applyProvider: "geminx-deepseek",
+      applyModelId: "deepseek-flash",
+      mockProviderRuntime: true,
+      thinkingLevel: "high",
+      model: {
+        api: "openai-completions",
+        provider: "geminx-deepseek",
+        id: "deepseek-flash",
+      } as Model<"openai-completions">,
+      payload: {
+        model: "deepseek-flash",
+        messages: [],
+      },
+    }).payload as Record<string, unknown>;
+
+    expect(payload.thinking).toEqual({ type: "enabled" });
+    expect(payload.reasoning_effort).toBe("high");
+  });
+
+
   it("does not inject thinking on canonical Microsoft Foundry", () => {
     const payload = runDeepSeekV4Case({
       provider: "microsoft-foundry",
