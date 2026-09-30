@@ -54,6 +54,9 @@ node openclaw.mjs config set agents.defaults.workspace "$workspace"
 node openclaw.mjs config set agents.defaults.heartbeat.every "0m"
 node openclaw.mjs config set agents.defaults.model.primary "geminx-deepseek/deepseek-flash"
 node openclaw.mjs config set agents.defaults.model.fallbacks "[\"geminx-deepseek/deepseek-v4-pro\"]" --strict-json
+# Keep routine turns non-thinking by default; the shared GeminX proxy raises
+# V4.1 Flash effort from the current task. Explicit /think overrides remain higher priority.
+node openclaw.mjs config set agents.defaults.thinkingDefault "off"
 node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
 # The Railway NEO runtime intentionally carries no OpenAI embedding credential.
 # Keep memory_search useful without noisy startup/auth failures by selecting
