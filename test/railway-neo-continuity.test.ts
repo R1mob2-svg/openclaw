@@ -34,6 +34,7 @@ describe("Railway NEO continuity bootstrap", () => {
 
     expect(script).toContain('agents.defaults.model.primary "geminx-deepseek/deepseek-flash"');
     expect(script).toContain('agents.defaults.model.fallbacks "[\\"geminx-deepseek/deepseek-v4-pro\\"]" --strict-json');
+    expect(script).toContain('agents.defaults.thinkingDefault "off"');
     expect(script).toContain("models.providers.geminx-deepseek");
     expect(script).not.toContain('agents.defaults.model.primary "deepseek/deepseek-v4-flash"');
     expect(script).not.toContain('geminx-native-neo');
