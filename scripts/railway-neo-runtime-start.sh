@@ -52,9 +52,13 @@ fi
 
 node openclaw.mjs config set agents.defaults.workspace "$workspace"
 node openclaw.mjs config set agents.defaults.heartbeat.every "0m"
-node openclaw.mjs config set agents.defaults.model.primary "geminx-deepseek/deepseek-v4-flash"
+# GeminX owns automatic task-based V4.1 thinking policy at the authenticated model proxy.
+# Keep OpenClaw's inherited level off so the proxy can choose no/low/high/max from the
+# actual objective. Explicit Founder /think overrides are still forwarded as reasoning_effort.
+node openclaw.mjs config set agents.defaults.thinkingDefault "off"
+node openclaw.mjs config set agents.defaults.model.primary "geminx-deepseek/deepseek-flash"
 node openclaw.mjs config set agents.defaults.model.fallbacks "[\"geminx-deepseek/deepseek-v4-pro\"]" --strict-json
-node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-v4-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
+node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
 # The Railway NEO runtime intentionally carries no OpenAI embedding credential.
 # Keep memory_search useful without noisy startup/auth failures by selecting
 # OpenClaw's deliberate lexical FTS-only mode instead of the default OpenAI provider.
@@ -69,7 +73,7 @@ node openclaw.mjs config set gateway.http.endpoints.chatCompletions.enabled true
 # without persisting the secret value itself in openclaw.json.
 node openclaw.mjs config set gateway.auth.mode "token"
 node openclaw.mjs config set gateway.auth.token '{"source":"env","provider":"default","id":"OPENCLAW_GATEWAY_TOKEN"}' --strict-json --replace
-node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-v4-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
+node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
 
 # NEO context self-heal profile.
 # Compact long active transcripts before transport/model limits are threatened,
@@ -81,7 +85,7 @@ node openclaw.mjs config set agents.defaults.compaction.truncateAfterCompaction 
 node openclaw.mjs config set agents.defaults.compaction.midTurnPrecheck.enabled "true" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.notifyUser "false" --strict-json
 # Memory flush is OpenClaw housekeeping, not Founder conversation. Keep it on the raw provider lane.
-node openclaw.mjs config set agents.defaults.compaction.memoryFlush.model "geminx-deepseek/deepseek-v4-flash"
+node openclaw.mjs config set agents.defaults.compaction.memoryFlush.model "geminx-deepseek/deepseek-flash"
 
 if [ -z "${OPENCLAW_MODEL_PROXY_BASE_URL:-}" ]; then
   echo "OPENCLAW_MODEL_PROXY_BASE_URL is required for the Railway DeepSeek provider bridge" >&2
@@ -101,6 +105,7 @@ const common = {
   compat: {
     supportsUsageInStreaming: true,
     supportsReasoningEffort: true,
+    supportedReasoningEfforts: ["low", "high", "max"],
     maxTokensField: "max_tokens"
   }
 };
@@ -113,7 +118,7 @@ process.stdout.write(JSON.stringify({
   authHeader: true,
   api: "openai-completions",
   models: [
-    { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash", ...common },
+    { id: "deepseek-flash", name: "DeepSeek V4.1 Flash", ...common },
     {
       id: "deepseek-v4-pro",
       name: "DeepSeek V4 Pro",
