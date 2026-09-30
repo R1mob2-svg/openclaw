@@ -68,6 +68,35 @@ describe("extra-params: DeepSeek V4 OpenAI-compatible thinking fallback", () => 
   });
 
 
+  it("strips replayed private reasoning for canonical deepseek-flash when continuation thinking is off", () => {
+    const payload = runExtraParamsCase({
+      applyProvider: "geminx-deepseek",
+      applyModelId: "deepseek-flash",
+      mockProviderRuntime: true,
+      thinkingLevel: "off",
+      model: {
+        api: "openai-completions",
+        provider: "geminx-deepseek",
+        id: "deepseek-flash",
+      } as Model<"openai-completions">,
+      payload: {
+        model: "deepseek-flash",
+        messages: [
+          { role: "user", content: "continue" },
+          { role: "assistant", content: "", reasoning_content: "provider-private reasoning" },
+          { role: "tool", tool_call_id: "call-1", content: "ok" },
+        ],
+      },
+    }).payload as Record<string, unknown>;
+
+    expect(payload.thinking).toEqual({ type: "disabled" });
+    expect(payload).not.toHaveProperty("reasoning_effort");
+    expect(JSON.stringify(payload)).not.toContain("provider-private reasoning");
+    expect((payload.messages as Array<Record<string, unknown>>)[1]).not.toHaveProperty(
+      "reasoning_content",
+    );
+  });
+
   it("does not inject thinking on canonical Microsoft Foundry", () => {
     const payload = runDeepSeekV4Case({
       provider: "microsoft-foundry",
