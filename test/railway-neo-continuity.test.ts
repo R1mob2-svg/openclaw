@@ -22,7 +22,7 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).toContain("OPENCLAW_MODEL_PROXY_BASE_URL");
     expect(script).toContain('models.providers.geminx-deepseek');
     expect(script).toContain('"OPENCLAW_GATEWAY_TOKEN"');
-    expect(script).toContain('"deepseek-v4-flash"');
+    expect(script).toContain('"deepseek-flash"');
     expect(script).toContain('"deepseek-v4-pro"');
     expect(script).toContain('"openai-completions"');
     expect(script).toContain("authHeader: true");
@@ -32,12 +32,12 @@ describe("Railway NEO continuity bootstrap", () => {
   it("isolates the GeminX DeepSeek proxy from persisted direct DeepSeek credentials", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
-    expect(script).toContain('agents.defaults.model.primary "geminx-deepseek/deepseek-v4-flash"');
+    expect(script).toContain('agents.defaults.model.primary "geminx-deepseek/deepseek-flash"');
     expect(script).toContain('agents.defaults.model.fallbacks "[\\"geminx-deepseek/deepseek-v4-pro\\"]" --strict-json');
     expect(script).toContain("models.providers.geminx-deepseek");
     expect(script).not.toContain('agents.defaults.model.primary "deepseek/deepseek-v4-flash"');
     expect(script).not.toContain('geminx-native-neo');
-    expect(script).toContain('agents.defaults.compaction.memoryFlush.model "geminx-deepseek/deepseek-v4-flash"');
+    expect(script).toContain('agents.defaults.compaction.memoryFlush.model "geminx-deepseek/deepseek-flash"');
   });
 
   it("pins Railway Gateway auth to the runtime token instead of a stale persisted literal", () => {
@@ -54,8 +54,8 @@ describe("Railway NEO continuity bootstrap", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
     expect(script).toContain('gateway.http.endpoints.chatCompletions.enabled true');
-    expect(script).toContain('agents.defaults.model.primary "geminx-deepseek/deepseek-v4-flash"');
-    expect(script).toContain('agents.defaults.models "{\\\"geminx-deepseek/deepseek-v4-flash\\\":{},\\\"geminx-deepseek/deepseek-v4-pro\\\":{}}"');
+    expect(script).toContain('agents.defaults.model.primary "geminx-deepseek/deepseek-flash"');
+    expect(script).toContain('agents.defaults.models "{\\\"geminx-deepseek/deepseek-flash\\\":{},\\\"geminx-deepseek/deepseek-v4-pro\\\":{}}"');
     expect(script).toContain("OpenClaw is a full NEO execution runtime with its own native tool loop");
     expect(script).toContain("GeminX provides the authenticated DeepSeek transport");
     expect(script).not.toContain("geminx-native-neo");
