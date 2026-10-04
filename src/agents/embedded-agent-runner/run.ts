@@ -2969,12 +2969,19 @@ async function runEmbeddedAgentInternal(
             assistantFailoverReason === "timeout" &&
             isGenericUnknownStreamErrorMessage(assistantForFailover?.errorMessage ?? "") &&
             Boolean(assistantForFailover && hasOnlyAssistantReasoningContent(assistantForFailover));
+          const assistantErrorText = assistantForFailover?.errorMessage ?? "";
+          const boundedContextOverflow =
+            isLikelyContextOverflowError(assistantErrorText) ||
+            /(?:\\b413\\b|bounded context budget|context budget.*(?:exceeded|overflow)|input exceeded.*context)/i.test(
+              assistantErrorText,
+            );
           const silentErrorRetryReason =
-            assistantFailoverReason === null ||
-            genericUnknownReasoningError ||
-            assistantFailoverReason === "no_error_details" ||
-            assistantFailoverReason === "unclassified" ||
-            assistantFailoverReason === "unknown";
+            !boundedContextOverflow &&
+            (assistantFailoverReason === null ||
+              genericUnknownReasoningError ||
+              assistantFailoverReason === "no_error_details" ||
+              assistantFailoverReason === "unclassified" ||
+              assistantFailoverReason === "unknown");
           // Retry replay-safe non-visible provider errors before assistant
           // failover surfaces them as terminal provider failures.
           if (
