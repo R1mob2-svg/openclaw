@@ -2969,11 +2969,11 @@ async function runEmbeddedAgentInternal(
             assistantFailoverReason === "timeout" &&
             isGenericUnknownStreamErrorMessage(assistantForFailover?.errorMessage ?? "") &&
             Boolean(assistantForFailover && hasOnlyAssistantReasoningContent(assistantForFailover));
-          const assistantErrorText = assistantForFailover?.errorMessage ?? "";
+          const failoverAssistantErrorText = assistantForFailover?.errorMessage ?? "";
           const boundedContextOverflow =
-            isLikelyContextOverflowError(assistantErrorText) ||
+            isLikelyContextOverflowError(failoverAssistantErrorText) ||
             /(?:\\b413\\b|bounded context budget|context budget.*(?:exceeded|overflow)|input exceeded.*context)/i.test(
-              assistantErrorText,
+              failoverAssistantErrorText,
             );
           const silentErrorRetryReason =
             !boundedContextOverflow &&
