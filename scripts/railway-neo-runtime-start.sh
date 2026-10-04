@@ -150,4 +150,11 @@ node openclaw.mjs plugins enable admin-http-rpc
 
 node openclaw.mjs config validate
 
-exec node openclaw.mjs gateway --allow-unconfigured --bind lan --port 8080
+# GitHub issue bus is a durable coordination ingress for NEO. Run it as a
+# sidecar in the same container so AGENT_MESSAGE_BUS envelopes are actually
+# materialized into the persistent OpenClaw runtime instead of sitting unread.
+node scripts/poll-agent-message-bus.mjs &
+agent_bus_pid=$!
+trap 'kill "$agent_bus_pid" 2>/dev/null || true' EXIT INT TERM
+
+node openclaw.mjs gateway --allow-unconfigured --bind lan --port 8080
