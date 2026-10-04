@@ -1,8 +1,11 @@
 import path from "node:path";
-import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 
 const API_VERSION = "2022-11-28";
 const DEFAULT_INTERVAL_MS = 60_000;
+const DEFAULT_EXECUTION_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const MAX_DISPATCH_ATTEMPTS = 3;
+const EXECUTABLE_NEO_COMMANDS = new Set(["GEMINX_AUTONOMOUS_TASK_V1"]);
 const TITLE_PREFIX = "AGENT_MESSAGE_BUS:";
 const SAFE_ID = /^[A-Za-z0-9._-]{1,160}$/;
 const SAFE_AGENT = /^[A-Za-z0-9._-]{1,80}$/;
@@ -24,6 +27,12 @@ function intervalMs() {
   return Number.isFinite(raw) && raw >= 15_000 ? Math.floor(raw) : DEFAULT_INTERVAL_MS;
 }
 
+function executionMaxAgeMs() {
+  const raw = Number(env("GEMINX_AGENT_BUS_EXECUTION_MAX_AGE_MS"));
+  if (!Number.isFinite(raw)) return DEFAULT_EXECUTION_MAX_AGE_MS;
+  return Math.max(15 * 60 * 1000, Math.min(24 * 60 * 60 * 1000, Math.floor(raw)));
+}
+
 function runtimeRoot() {
   // Keep the issue poller on the exact same durable directory as CommsStore.
   // Railway provides a mounted volume even when GEMINX_RUNTIME_ROOT is unset.
@@ -40,8 +49,24 @@ function commsRoot() {
   return root;
 }
 
+function safeMessageId(messageId) {
+  return messageId.replace(/[^A-Za-z0-9._-]/g, "_");
+}
+
 function messagePath(messageId) {
-  return path.join(commsRoot(), `${messageId.replace(/[^A-Za-z0-9._-]/g, "_")}.json`);
+  return path.join(commsRoot(), `${safeMessageId(messageId)}.json`);
+}
+
+function dispatchStatePath(messageId) {
+  const root = path.join(commsRoot(), "dispatch");
+  mkdirSync(root, { recursive: true });
+  return path.join(root, `${safeMessageId(messageId)}.json`);
+}
+
+function executionReceiptPath(messageId) {
+  const root = path.join(commsRoot(), "receipts");
+  mkdirSync(root, { recursive: true });
+  return path.join(root, `${safeMessageId(messageId)}.json`);
 }
 
 function atomicWrite(filePath, value) {
@@ -185,16 +210,12 @@ function localStatus(remoteStatus) {
   return "QUEUED";
 }
 
-function ingestIssue(repo, issue, envelope) {
-  if (!envelope) return false;
-
-  const filePath = messagePath(envelope.messageId);
-  if (existsSync(filePath)) return false;
-
+function buildMessage(repo, issue, envelope) {
+  if (!envelope) return null;
   const issueNumber = Number(issue.number);
   const issueUrl = typeof issue.html_url === "string" ? issue.html_url : null;
   const createdAt = typeof issue.created_at === "string" ? issue.created_at : new Date().toISOString();
-  const message = {
+  return {
     message_id: envelope.messageId,
     correlation_id: envelope.correlationId,
     sender: envelope.sender,
@@ -215,10 +236,188 @@ function ingestIssue(repo, issue, envelope) {
     requires_reply: true,
     status: localStatus(envelope.status),
   };
+}
+
+function ingestIssue(repo, issue, envelope) {
+  const message = buildMessage(repo, issue, envelope);
+  if (!message) return { message: null, created: false };
+
+  const filePath = messagePath(message.message_id);
+  if (existsSync(filePath)) return { message, created: false };
 
   atomicWrite(filePath, message);
-  console.log(`[agent-message-bus] action=queued repo=${repo} issue=${Number.isSafeInteger(issueNumber) ? issueNumber : "unknown"} message_id=${envelope.messageId} sender=${envelope.sender} recipient=${envelope.recipient} command=${envelope.command}`);
-  return true;
+  const issueNumber = Number(issue.number);
+  console.log(`[agent-message-bus] action=queued repo=${repo} issue=${Number.isSafeInteger(issueNumber) ? issueNumber : "unknown"} message_id=${message.message_id} sender=${message.sender} recipient=${message.recipient} command=${message.payload.command}`);
+  return { message, created: true };
+}
+
+function readJsonFile(filePath, fallback) {
+  try {
+    return JSON.parse(readFileSync(filePath, "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+function shouldDispatchToNeo(message) {
+  if (!message) return false;
+  if (String(message.recipient ?? "").toLowerCase() !== "neo") return false;
+  if (String(message.sender ?? "").toLowerCase() !== "newton") return false;
+  if (!EXECUTABLE_NEO_COMMANDS.has(String(message.payload?.command ?? ""))) return false;
+  if (!["QUEUED", "ACKNOWLEDGED"].includes(String(message.status ?? ""))) return false;
+  const createdMs = Date.parse(String(message.created_at ?? ""));
+  if (!Number.isFinite(createdMs)) return false;
+  return Date.now() - createdMs >= 0 && Date.now() - createdMs <= executionMaxAgeMs();
+}
+
+function boundedReceiptText(value) {
+  return String(value ?? "")
+    .replace(/\b(?:gh[pousr]|github_pat)_[A-Za-z0-9_]{16,}\b/gi, "[REDACTED_GITHUB_TOKEN]")
+    .replace(/\bsk-[A-Za-z0-9_-]{16,}\b/g, "[REDACTED_API_KEY]")
+    .replace(/Bearer\s+[A-Za-z0-9._~+\/-]{16,}/gi, "Bearer [REDACTED]")
+    .slice(0, 4000);
+}
+
+function promptForNeoBusMessage(message) {
+  const payload = JSON.stringify(message.payload ?? {}, null, 2);
+  return [
+    "AGENT_MESSAGE_BUS_OBJECTIVE_V1",
+    `message_id=${message.message_id}`,
+    `correlation_id=${message.correlation_id}`,
+    `sender=${message.sender}`,
+    `priority=${message.priority}`,
+    "",
+    "This is a founder-authorized NEO coordination objective delivered through the canonical GitHub agent bus.",
+    "Own the objective end-to-end using native OpenClaw tools. Recover mechanically discoverable repo/service/runtime details yourself.",
+    "Do not ask Rob to point you at a repo/service when current tools or the canonical Brain can resolve it.",
+    "Do not claim PASS without mechanical evidence. After any repair, rerun the same failed probe.",
+    "Return a concise terminal receipt with status, evidence, remaining blocker if any, and next action.",
+    "",
+    "PAYLOAD:",
+    payload,
+  ].join("\n");
+}
+
+async function postIssueReceipt(repo, issueNumber, token, message, status, responseText) {
+  if (!Number.isSafeInteger(issueNumber)) return;
+  const receiptPayload = {
+    schema_version: "openclaw.neo-agent-message-bus-receipt.v1",
+    message_id: message.message_id,
+    correlation_id: message.correlation_id,
+    status,
+    response: boundedReceiptText(responseText),
+    observed_at: new Date().toISOString(),
+  };
+  const body = [
+    `message_id: ${message.message_id}-receipt`,
+    `correlation_id: ${message.correlation_id}`,
+    "sender: neo",
+    `recipient: ${message.sender}`,
+    `status: ${status}`,
+    `priority: ${message.priority}`,
+    "command: AGENT_MESSAGE_BUS_RECEIPT_V1",
+    `payload_b64: ${Buffer.from(JSON.stringify(receiptPayload), "utf8").toString("base64")}`,
+  ].join("\n");
+  const response = await fetch(`https://api.github.com/repos/${repo}/issues/${issueNumber}/comments`, {
+    method: "POST",
+    headers: {
+      ...githubHeaders(token),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ body }),
+    signal: typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(15_000) : undefined,
+  });
+  if (!response.ok) throw new Error(`receipt_comment_http_${response.status}`);
+}
+
+async function dispatchNeoMessage(repo, issue, token, message) {
+  if (!shouldDispatchToNeo(message)) return false;
+  const receiptFile = executionReceiptPath(message.message_id);
+  if (existsSync(receiptFile)) return false;
+
+  const stateFile = dispatchStatePath(message.message_id);
+  const state = readJsonFile(stateFile, { attempts: 0 });
+  const attempts = Number(state?.attempts ?? 0);
+  if (attempts >= MAX_DISPATCH_ATTEMPTS) return false;
+
+  const gatewayToken = env("OPENCLAW_GATEWAY_TOKEN");
+  if (!gatewayToken) {
+    console.log(`[agent-message-bus] action=dispatch_blocked message_id=${message.message_id} reason=gateway_token_missing`);
+    return false;
+  }
+
+  const nextAttempts = attempts + 1;
+  atomicWrite(stateFile, {
+    attempts: nextAttempts,
+    last_attempt_at: new Date().toISOString(),
+  });
+
+  let terminalStatus = "BLOCKED";
+  let terminalText = "";
+  try {
+    const response = await fetch("http://127.0.0.1:8080/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${gatewayToken}`,
+        "Content-Type": "application/json",
+        "X-OpenClaw-Message-Channel": "agent-message-bus",
+      },
+      body: JSON.stringify({
+        model: "openclaw",
+        stream: false,
+        user: `agent-bus-${message.message_id}`,
+        messages: [{ role: "user", content: promptForNeoBusMessage(message) }],
+      }),
+      signal: typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(120_000) : undefined,
+    });
+
+    if (!response.ok) {
+      terminalText = `gateway_http_${response.status}`;
+      throw new Error(terminalText);
+    }
+    const body = await response.json();
+    terminalText = boundedReceiptText(body?.choices?.[0]?.message?.content ?? "");
+    if (!terminalText) throw new Error("gateway_empty_response");
+    terminalStatus = "COMPLETED";
+
+    atomicWrite(receiptFile, {
+      schema_version: "openclaw.neo-agent-message-bus-receipt.v1",
+      message_id: message.message_id,
+      correlation_id: message.correlation_id,
+      status: terminalStatus,
+      attempts: nextAttempts,
+      response: terminalText,
+      observed_at: new Date().toISOString(),
+    });
+    console.log(`[agent-message-bus] action=executed message_id=${message.message_id} correlation_id=${message.correlation_id} status=${terminalStatus} attempts=${nextAttempts}`);
+
+    try {
+      await postIssueReceipt(repo, Number(issue.number), token, message, terminalStatus, terminalText);
+      console.log(`[agent-message-bus] action=receipt_mirrored repo=${repo} issue=${Number(issue.number)} message_id=${message.message_id}`);
+    } catch (error) {
+      const mirrorError = error instanceof Error ? error.message : String(error);
+      console.log(`[agent-message-bus] action=receipt_mirror_failed message_id=${message.message_id} error=${mirrorError.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 160)}`);
+    }
+    return true;
+  } catch (error) {
+    const failure = error instanceof Error ? error.message : String(error);
+    console.log(`[agent-message-bus] action=dispatch_failed message_id=${message.message_id} attempt=${nextAttempts}/${MAX_DISPATCH_ATTEMPTS} error=${failure.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 160)}`);
+    if (nextAttempts >= MAX_DISPATCH_ATTEMPTS) {
+      atomicWrite(receiptFile, {
+        schema_version: "openclaw.neo-agent-message-bus-receipt.v1",
+        message_id: message.message_id,
+        correlation_id: message.correlation_id,
+        status: terminalStatus,
+        attempts: nextAttempts,
+        error: boundedReceiptText(failure),
+        observed_at: new Date().toISOString(),
+      });
+      try {
+        await postIssueReceipt(repo, Number(issue.number), token, message, terminalStatus, failure);
+      } catch {}
+    }
+    return false;
+  }
 }
 
 async function sweep() {
@@ -243,7 +442,11 @@ async function sweep() {
       const issues = await fetchOpenIssues(repo, token);
       for (const issue of issues) {
         const envelope = await envelopeForIssue(repo, issue, token);
-        if (ingestIssue(repo, issue, envelope)) discovered += 1;
+        const ingested = ingestIssue(repo, issue, envelope);
+        if (ingested.created) discovered += 1;
+        if (ingested.message) {
+          await dispatchNeoMessage(repo, issue, token, ingested.message);
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
