@@ -79,8 +79,8 @@ node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek
 # NEO context self-heal profile.
 # Compact long active transcripts before transport/model limits are threatened,
 # retain a useful recent tail, and re-check pressure between tool turns.
-node openclaw.mjs config set agents.defaults.compaction.reserveTokens "100000" --strict-json
-node openclaw.mjs config set agents.defaults.compaction.keepRecentTokens "60000" --strict-json
+node openclaw.mjs config set agents.defaults.compaction.reserveTokens "32000" --strict-json
+node openclaw.mjs config set agents.defaults.compaction.keepRecentTokens "24000" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.maxActiveTranscriptBytes "\"8mb\"" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.truncateAfterCompaction "true" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.midTurnPrecheck.enabled "true" --strict-json
@@ -100,8 +100,10 @@ if (!baseUrl) process.exit(2);
 const common = {
   reasoning: true,
   input: ["text"],
-  contextWindow: 1000000,
-  maxTokens: 384000,
+  // Advertise the bounded window the GeminX proxy can actually sustain. A
+  // fictional 1M window prevents OpenClaw from compacting before proxy limits.
+  contextWindow: 128000,
+  maxTokens: 32000,
   cost: { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0 },
   compat: {
     supportsUsageInStreaming: true,
