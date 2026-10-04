@@ -222,11 +222,20 @@ function ingestIssue(repo, issue, envelope) {
 }
 
 async function sweep() {
-  const token = env("GEMINX_REPO_ACCESS_TOKEN");
+  const tokenCandidates = [
+    ["GEMINX_REPO_ACCESS_TOKEN", env("GEMINX_REPO_ACCESS_TOKEN")],
+    ["GH_TOKEN", env("GH_TOKEN")],
+    ["GITHUB_TOKEN", env("GITHUB_TOKEN")],
+    ["GITHUB_PAT", env("GITHUB_PAT")]
+  ];
+  const selected = tokenCandidates.find(([, value]) => Boolean(value));
+  const token = selected?.[1] ?? "";
+  const tokenSource = selected?.[0] ?? "none";
   if (!token) {
     console.log("[agent-message-bus] skipped=repo_access_missing");
     return;
   }
+  console.log(`[agent-message-bus] auth_source=${tokenSource}`);
 
   let discovered = 0;
   for (const repo of repos()) {
