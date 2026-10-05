@@ -22,6 +22,20 @@ fi
 install -m 0644 "$profile_dir/SOUL.md" "$soul"
 install -m 0644 "$profile_dir/AGENTS.md" "$agents"
 
+# Repository-managed NEO skills are canonical on every Railway boot. This keeps
+# the persistent volume from drifting away from the reviewed GitHub skill set.
+managed_skills="$profile_dir/skills"
+workspace_skills="$workspace/skills"
+mkdir -p "$workspace_skills"
+if [ -d "$managed_skills" ]; then
+  for skill_dir in "$managed_skills"/*; do
+    [ -d "$skill_dir" ] || continue
+    skill_name="$(basename "$skill_dir")"
+    rm -rf "$workspace_skills/$skill_name"
+    cp -R "$skill_dir" "$workspace_skills/$skill_name"
+  done
+fi
+
 identity="$workspace/IDENTITY.md"
 if [ ! -s "$identity" ]; then
   cat > "$identity" <<'EOF'
