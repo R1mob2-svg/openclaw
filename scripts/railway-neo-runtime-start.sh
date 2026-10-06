@@ -93,9 +93,10 @@ node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek
 # NEO context self-heal profile.
 # Compact long active transcripts before transport/model limits are threatened,
 # retain a useful recent tail, and re-check pressure between tool turns.
-node openclaw.mjs config set agents.defaults.compaction.reserveTokens "32000" --strict-json
-node openclaw.mjs config set agents.defaults.compaction.keepRecentTokens "24000" --strict-json
-node openclaw.mjs config set agents.defaults.compaction.maxActiveTranscriptBytes "\"8mb\"" --strict-json
+node openclaw.mjs config set agents.defaults.contextTokens "1048576" --strict-json
+node openclaw.mjs config set agents.defaults.compaction.reserveTokens "65536" --strict-json
+node openclaw.mjs config set agents.defaults.compaction.keepRecentTokens "65536" --strict-json
+node openclaw.mjs config set agents.defaults.compaction.maxActiveTranscriptBytes "\"32mb\"" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.truncateAfterCompaction "true" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.midTurnPrecheck.enabled "true" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.notifyUser "false" --strict-json
@@ -114,9 +115,10 @@ if (!baseUrl) process.exit(2);
 const common = {
   reasoning: true,
   input: ["text"],
-  // Advertise the bounded window the GeminX proxy can actually sustain. A
-  // fictional 1M window prevents OpenClaw from compacting before proxy limits.
-  contextWindow: 128000,
+  // DeepSeek V4.1 Flash and V4 Pro expose a native 1,048,576-token window.
+  // Keep OpenClaw aligned with the provider so Cloud NEO can use the full context
+  // while compaction still reserves a bounded tail before the true ceiling.
+  contextWindow: 1048576,
   maxTokens: 32000,
   cost: { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0 },
   compat: {
