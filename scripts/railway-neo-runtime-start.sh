@@ -67,13 +67,14 @@ fi
 node openclaw.mjs config set agents.defaults.workspace "$workspace"
 node openclaw.mjs config set agents.defaults.heartbeat.every "0m"
 node openclaw.mjs config set agents.defaults.model.primary "geminx-deepseek/deepseek-flash"
-node openclaw.mjs config set agents.defaults.model.fallbacks "[]" --strict-json
+node openclaw.mjs config set agents.defaults.model.fallbacks "[\"google/gemini-3.1-flash-lite\"]" --strict-json
 # Keep routine turns non-thinking by default; the shared GeminX proxy raises
-# V4.1 Flash effort from the current task. Pro stays registered for explicit,
-# evidence-driven escalation instead of generic auth/billing/timeout failover.
+# V4.1 Flash effort from the current task. A cheap Gemini Flash-Lite fallback
+# is available only when the primary provider fails. Pro stays registered for
+# explicit, evidence-driven escalation instead of generic auth/billing/timeout failover.
 # Explicit /think overrides remain higher priority.
 node openclaw.mjs config set agents.defaults.thinkingDefault "off"
-node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
+node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-flash\":{},\"google/gemini-3.1-flash-lite\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
 # The Railway NEO runtime intentionally carries no OpenAI embedding credential.
 # Keep memory_search useful without noisy startup/auth failures by selecting
 # OpenClaw's deliberate lexical FTS-only mode instead of the default OpenAI provider.
@@ -88,7 +89,7 @@ node openclaw.mjs config set gateway.http.endpoints.chatCompletions.enabled true
 # without persisting the secret value itself in openclaw.json.
 node openclaw.mjs config set gateway.auth.mode "token"
 node openclaw.mjs config set gateway.auth.token '{"source":"env","provider":"default","id":"OPENCLAW_GATEWAY_TOKEN"}' --strict-json --replace
-node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
+node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-flash\":{},\"google/gemini-3.1-flash-lite\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
 
 # NEO context self-heal profile.
 # Compact long active transcripts before transport/model limits are threatened,
