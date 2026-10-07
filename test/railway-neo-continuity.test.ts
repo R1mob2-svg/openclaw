@@ -33,7 +33,7 @@ describe("Railway NEO continuity bootstrap", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
     expect(script).toContain('agents.defaults.model.primary "geminx-deepseek/deepseek-flash"');
-    expect(script).toContain('agents.defaults.model.fallbacks "[]" --strict-json');
+    expect(script).toContain('agents.defaults.model.fallbacks "[\\\"google/gemini-3.1-flash-lite\\\"]" --strict-json');
     expect(script).toContain('agents.defaults.thinkingDefault "off"');
     expect(script).toContain("models.providers.geminx-deepseek");
     expect(script).not.toContain('agents.defaults.model.primary "deepseek/deepseek-v4-flash"');
@@ -56,7 +56,7 @@ describe("Railway NEO continuity bootstrap", () => {
 
     expect(script).toContain('gateway.http.endpoints.chatCompletions.enabled true');
     expect(script).toContain('agents.defaults.model.primary "geminx-deepseek/deepseek-flash"');
-    expect(script).toContain('agents.defaults.models "{\\\"geminx-deepseek/deepseek-flash\\\":{},\\\"geminx-deepseek/deepseek-v4-pro\\\":{}}"');
+    expect(script).toContain('agents.defaults.models "{\\\"geminx-deepseek/deepseek-flash\\\":{},\\\"google/gemini-3.1-flash-lite\\\":{},\\\"geminx-deepseek/deepseek-v4-pro\\\":{}}"');
     expect(script).toContain("OpenClaw is a full NEO execution runtime with its own native tool loop");
     expect(script).toContain("GeminX provides the authenticated DeepSeek transport");
     expect(script).not.toContain("geminx-native-neo");
