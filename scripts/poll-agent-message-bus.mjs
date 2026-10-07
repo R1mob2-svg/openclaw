@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 const API_VERSION = "2022-11-28";
 const DEFAULT_INTERVAL_MS = 60_000;
 const DEFAULT_EXECUTION_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const DEFAULT_NEO_DISPATCH_TIMEOUT_MS = 300_000;
 const MAX_DISPATCH_ATTEMPTS = 3;
 const EXECUTABLE_NEO_COMMANDS = new Set(["GEMINX_AUTONOMOUS_TASK_V1"]);
 const TITLE_PREFIX = "AGENT_MESSAGE_BUS:";
@@ -31,6 +32,12 @@ function executionMaxAgeMs() {
   const raw = Number(env("GEMINX_AGENT_BUS_EXECUTION_MAX_AGE_MS"));
   if (!Number.isFinite(raw)) return DEFAULT_EXECUTION_MAX_AGE_MS;
   return Math.max(15 * 60 * 1000, Math.min(24 * 60 * 60 * 1000, Math.floor(raw)));
+}
+
+function neoDispatchTimeoutMs() {
+  const raw = Number(env("GEMINX_AGENT_BUS_NEO_DISPATCH_TIMEOUT_MS"));
+  if (!Number.isFinite(raw)) return DEFAULT_NEO_DISPATCH_TIMEOUT_MS;
+  return Math.max(120_000, Math.min(300_000, Math.floor(raw)));
 }
 
 function runtimeRoot() {
@@ -368,7 +375,7 @@ async function dispatchNeoMessage(repo, issue, token, message) {
         user: `agent-bus-${message.message_id}`,
         messages: [{ role: "user", content: promptForNeoBusMessage(message) }],
       }),
-      signal: typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(120_000) : undefined,
+      signal: typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(neoDispatchTimeoutMs()) : undefined,
     });
 
     if (!response.ok) {
