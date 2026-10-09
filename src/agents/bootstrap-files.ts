@@ -329,7 +329,7 @@ function neoRemoteBrainFailureFile(
 async function loadNeoDirectCanonicalBrainFile(
   workspaceDir: string,
 ): Promise<WorkspaceBootstrapFile | null> {
-  if (!/^(1|true|yes|on)$/i.test(process.env.OPENCLAW_NEO_GITHUB_FALLBACK_ENABLED ?? "")) {
+  if (!/^(1|true|yes|on)$/i.test(process.env.OPENCLAW_NEO_GITHUB_FALLBACK_ENABLED ?? "true")) {
     return null;
   }
   const token = (process.env.GITHUB_TOKEN || process.env.GITHUB_PAT || "").trim();
