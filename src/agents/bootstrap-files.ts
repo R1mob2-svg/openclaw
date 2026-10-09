@@ -304,6 +304,18 @@ function neoRemoteBrainFailureFile(
       message,
       "Do not claim this OpenClaw session is freshly synchronized with the canonical GitHub Brain.",
       "Use local durable memory only as fallback and surface the continuity gap when it matters.",
+      "",
+      "## Last-known canonical programme pointers (NOT current runtime proof)",
+      "NEO is the founder-facing OpenClaw operator; Newton is the existing architect/reviewer, not an unknown agent and not someone to recreate.",
+      "The existing programme is the multi-agent PAPER-ONLY trading laboratory with isolated AG, NEO and GeminX lanes. Newton is the reviewer.",
+      "Canonical reference: R1mob2-svg/global-agent-brain/main:Trading/MULTI_AGENT_PAPER_LAB_2026-10-07.md",
+      "Risk reference: R1mob2-svg/global-agent-brain/main:Trading/PAPER_TOURNAMENT_RISK_STANDARD.md",
+      "NEO identity reference: R1mob2-svg/global-agent-brain/main:Agents/NEO/IDENTITY.md",
+      "Newton reference: R1mob2-svg/global-agent-brain/main:Agents/Newton/README.md",
+      "The paper tournament already exists. Do not ask the founder for the platform, assets or goals again as if the work were new.",
+      "Do not create a parallel tournament, new accounts, a new agent, new scheduler, or live-money trades.",
+      "When asked for current trading activity, report that fresh status is UNVERIFIED until canonical Brain/runtime receipts become accessible. Do not claim trading has started merely from historical project documents.",
+      "Recover the existing objective by reconnecting to the canonical Brain and current execution receipts, not by improvising a new strategy.",
     ].join("\n"),
   };
 }
