@@ -67,6 +67,11 @@ describe("NEO remote Brain bootstrap", () => {
     );
 
     expect(remote?.content).toContain("REMOTE_BRAIN_STATUS=UNAVAILABLE");
+    expect(remote?.content).toContain("Newton is the existing architect/reviewer");
+    expect(remote?.content).toContain("PAPER-ONLY trading laboratory");
+    expect(remote?.content).toContain("Do not ask the founder for the platform, assets or goals again");
+    expect(remote?.content).toContain("fresh status is UNVERIFIED");
+
     expect(remote?.content).toContain("Do not claim this OpenClaw session is freshly synchronized");
   });
 
