@@ -112,6 +112,32 @@ if [ -z "${OPENCLAW_MODEL_PROXY_BASE_URL:-}" ]; then
   exit 1
 fi
 
+# Refuse to turn on the new model alias until the SAME existing backend exposes
+# its authenticated zero-inference model-core status. No credits are consumed.
+node - <<'NODE'
+(async () => {
+  const base = process.env.OPENCLAW_MODEL_PROXY_BASE_URL?.trim().replace(/\/+$/, "");
+  const token = process.env.OPENCLAW_GATEWAY_TOKEN?.trim();
+  if (!base || !token) throw new Error("MODEL_CORE_PROXY_CREDENTIALS_MISSING");
+  const statusUrl = base.replace(/\/v1$/, "") + "/status";
+  const response = await fetch(statusUrl, {
+    headers: { authorization: "Bearer " + token },
+    signal: AbortSignal.timeout(12000)
+  });
+  if (!response.ok) throw new Error("MODEL_CORE_BACKEND_STATUS_" + response.status);
+  const report = await response.json();
+  if (report.schema_version !== "geminx.one-model-core.status.v1" || report.provider_route !== "geminx-auto") {
+    throw new Error("MODEL_CORE_BACKEND_ALIAS_UNVERIFIED");
+  }
+  console.log("[model-core] backend_status_verified=true free_admission=" +
+    String(report.google_free_admission) + " deepseek_fallback=" +
+    Boolean(report.deepseek_fallback_configured));
+})().catch((error) => {
+  console.error("[model-core] fail_closed_on_unverified_backend=" + String(error.message || error));
+  process.exit(1);
+});
+NODE
+
 deepseek_provider_json="$(
   node - <<'NODE'
 const baseUrl = process.env.OPENCLAW_MODEL_PROXY_BASE_URL?.trim().replace(/\/+$/, "");
