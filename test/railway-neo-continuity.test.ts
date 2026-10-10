@@ -74,9 +74,10 @@ describe("Railway NEO continuity bootstrap", () => {
   it("preemptively compacts long Railway NEO sessions before transport or provider overflow", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
-    expect(script).toContain('agents.defaults.compaction.reserveTokens "65536"');
-    expect(script).toContain('agents.defaults.compaction.keepRecentTokens "65536"');
-    expect(script).toContain('agents.defaults.compaction.maxActiveTranscriptBytes "\\"32mb\\""');
+    expect(script).toContain('agents.defaults.contextTokens "96000"');
+    expect(script).toContain('agents.defaults.compaction.reserveTokens "24000"');
+    expect(script).toContain('agents.defaults.compaction.keepRecentTokens "12000"');
+    expect(script).toContain('agents.defaults.compaction.maxActiveTranscriptBytes "\\"4mb\\""');
     expect(script).toContain('agents.defaults.compaction.truncateAfterCompaction "true"');
     expect(script).toContain('agents.defaults.compaction.midTurnPrecheck.enabled "true"');
     expect(script).toContain('agents.defaults.compaction.notifyUser "false"');
