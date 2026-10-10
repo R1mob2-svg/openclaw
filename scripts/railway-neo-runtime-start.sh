@@ -91,13 +91,15 @@ node openclaw.mjs config set gateway.auth.mode "token"
 node openclaw.mjs config set gateway.auth.token '{"source":"env","provider":"default","id":"OPENCLAW_GATEWAY_TOKEN"}' --strict-json --replace
 node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/deepseek-flash\":{},\"google/gemini-3.1-flash-lite\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
 
-# NEO context self-heal profile.
+# NEO cost and context profile: deliberately compact long conversations early.
+# Preserve the exact objective in durable Brain/checkpoints instead of replaying
+# a 65k-token recent tail on every continuation. This is not a heartbeat job.
 # Compact long active transcripts before transport/model limits are threatened,
 # retain a useful recent tail, and re-check pressure between tool turns.
-node openclaw.mjs config set agents.defaults.contextTokens "1048576" --strict-json
-node openclaw.mjs config set agents.defaults.compaction.reserveTokens "65536" --strict-json
-node openclaw.mjs config set agents.defaults.compaction.keepRecentTokens "65536" --strict-json
-node openclaw.mjs config set agents.defaults.compaction.maxActiveTranscriptBytes "\"32mb\"" --strict-json
+node openclaw.mjs config set agents.defaults.contextTokens "96000" --strict-json
+node openclaw.mjs config set agents.defaults.compaction.reserveTokens "24000" --strict-json
+node openclaw.mjs config set agents.defaults.compaction.keepRecentTokens "12000" --strict-json
+node openclaw.mjs config set agents.defaults.compaction.maxActiveTranscriptBytes "\"4mb\"" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.truncateAfterCompaction "true" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.midTurnPrecheck.enabled "true" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.notifyUser "false" --strict-json
@@ -116,11 +118,10 @@ if (!baseUrl) process.exit(2);
 const common = {
   reasoning: true,
   input: ["text"],
-  // DeepSeek V4.1 Flash and V4 Pro expose a native 1,048,576-token window.
-  // Keep OpenClaw aligned with the provider so Cloud NEO can use the full context
-  // while compaction still reserves a bounded tail before the true ceiling.
-  contextWindow: 1048576,
-  maxTokens: 32000,
+  // Keep the effective model window aligned with the GEMINX model proxy instead
+  // of advertising the provider maximum and repeatedly paying for giant contexts.
+  contextWindow: 96000,
+  maxTokens: 8192,
   cost: { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0 },
   compat: {
     supportsUsageInStreaming: true,
