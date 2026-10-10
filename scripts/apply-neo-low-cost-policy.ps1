@@ -64,7 +64,7 @@ try {
   }
   Write-Output "COST_POLICY_COMPLETE=true"
 } catch {
-  Write-Error ("COST_POLICY_FAILED=" + $_.Exception.Message)
+  Write-Warning ("COST_POLICY_FAILED=" + $_.Exception.Message)
   if ($backup -and (Test-Path $backup -PathType Leaf)) {
     Copy-Item -LiteralPath $backup -Destination $config -Force
     Write-Output "COST_POLICY_RESTORED_PREVIOUS_CONFIG=true"
