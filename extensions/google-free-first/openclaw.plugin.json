@@ -1,0 +1,14 @@
+{
+  "id": "google-free-first",
+  "name": "Google free-first with per-agent quota",
+  "description": "Opt-in free-tier Google Flash model routing with local per-agent daily request ceilings and native DeepSeek fallback.",
+  "activation": {
+    "onStartup": true
+  },
+  "enabledByDefault": false,
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
