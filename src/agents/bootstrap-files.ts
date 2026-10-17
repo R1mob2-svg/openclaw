@@ -304,8 +304,99 @@ function neoRemoteBrainFailureFile(
       message,
       "Do not claim this OpenClaw session is freshly synchronized with the canonical GitHub Brain.",
       "Use local durable memory only as fallback and surface the continuity gap when it matters.",
+      "",
+      "## Last-known canonical programme pointers (NOT current runtime proof)",
+      "NEO is the founder-facing OpenClaw operator; Newton is the existing architect/reviewer, not an unknown agent and not someone to recreate.",
+      "The existing programme is the multi-agent PAPER-ONLY trading laboratory with isolated AG, NEO and GeminX lanes. Newton is the reviewer.",
+      "Canonical reference: R1mob2-svg/global-agent-brain/main:Trading/MULTI_AGENT_PAPER_LAB_2026-10-07.md",
+      "Risk reference: R1mob2-svg/global-agent-brain/main:Trading/PAPER_TOURNAMENT_RISK_STANDARD.md",
+      "NEO identity reference: R1mob2-svg/global-agent-brain/main:Agents/NEO/IDENTITY.md",
+      "Newton reference: R1mob2-svg/global-agent-brain/main:Agents/Newton/README.md",
+      "The paper tournament already exists. Do not ask the founder for the platform, assets or goals again as if the work were new.",
+      "Do not create a parallel tournament, new accounts, a new agent, new scheduler, or live-money trades.",
+      "When asked for current trading activity, report that fresh status is UNVERIFIED until canonical Brain/runtime receipts become accessible. Do not claim trading has started merely from historical project documents.",
+      "Recover the existing objective by reconnecting to the canonical Brain and current execution receipts, not by improvising a new strategy.",
     ].join("\n"),
   };
+}
+
+/**
+ * Read-only continuity fallback when the GeminX relay cannot supply its
+ * verified Brain capsule. The SAME canonical GitHub main branch is queried at
+ * a pinned commit. No clone/second Brain/queue or credential in model context.
+ * This contains stable identity/project documents, NOT live paper trade proof.
+ */
+async function loadNeoDirectCanonicalBrainFile(
+  workspaceDir: string,
+): Promise<WorkspaceBootstrapFile | null> {
+  if (!/^(1|true|yes|on)$/i.test(process.env.OPENCLAW_NEO_GITHUB_FALLBACK_ENABLED ?? "true")) {
+    return null;
+  }
+  const token = (process.env.GITHUB_TOKEN || process.env.GITHUB_PAT || "").trim();
+  if (!token) return null;
+  const base = "https://api.github.com/repos/R1mob2-svg/global-agent-brain";
+  const required = [
+    "Agents/NEO/IDENTITY.md",
+    "Agents/NEO/ACTIVE_STATE.md",
+    "Agents/Newton/README.md",
+    "Trading/MULTI_AGENT_PAPER_LAB_2026-10-07.md",
+    "Trading/PAPER_TOURNAMENT_RISK_STANDARD.md",
+  ];
+  const headers = {
+    authorization: "Bearer " + token,
+    accept: "application/vnd.github+json",
+    "x-github-api-version": "2022-11-28",
+    "user-agent": "openclaw-neo-canonical-readonly-fallback",
+  };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const revisionResponse = await fetch(base + "/commits/main", {
+      headers, cache: "no-store", signal: controller.signal,
+    });
+    if (!revisionResponse.ok) return null;
+    const revision = String((await revisionResponse.json() as { sha?: unknown }).sha ?? "").trim();
+    if (!/^[a-f0-9]{40}$/i.test(revision)) return null;
+    const pieces: string[] = [];
+    for (const filePath of required) {
+      const encoded = filePath.split("/").map(encodeURIComponent).join("/");
+      const response = await fetch(base + "/contents/" + encoded + "?ref=" + revision, {
+        headers, cache: "no-store", signal: controller.signal,
+      });
+      if (!response.ok) return null;
+      const payload = await response.json() as { content?: unknown; encoding?: unknown };
+      if (payload.encoding !== "base64" || typeof payload.content !== "string") return null;
+      const raw = Buffer.from(payload.content.replace(/\s/g, ""), "base64").toString("utf8");
+      if (!raw.trim() || raw.length > 30_000) return null;
+      // Keep credentials out of model-visible fallback text.
+      const redacted = raw
+        .replace(/github_pat_[A-Za-z0-9_]{20,}/g, "[REDACTED_GITHUB_TOKEN]")
+        .replace(/gh[pou]_[A-Za-z0-9]{20,}/g, "[REDACTED_GITHUB_TOKEN]")
+        .replace(/sk-[A-Za-z0-9_-]{16,}/g, "[REDACTED_API_KEY]");
+      pieces.push("SOURCE FILE: " + filePath + "\n" + redacted);
+    }
+    return {
+      name: "MEMORY.md",
+      path: path.join(workspaceDir, ".neo-remote-brain", "MEMORY.md"),
+      missing: false,
+      content: [
+        "# NEO canonical GitHub Brain — direct verified fallback",
+        "REMOTE_BRAIN_STATUS=ATTACHED",
+        "BRIDGE_STATUS=UNAVAILABLE; READ_SOURCE=CANONICAL_GITHUB_MAIN",
+        "VERIFIED_GIT_REVISION=" + revision,
+        "CANONICAL_SOURCES=" + required.length,
+        "Data pinned to the exact commit above; runtime state after that commit may differ.",
+        "These documents prove identity and the existing paper-trading doctrine, NOT a live trading execution or completed transaction.",
+        "Never claim a current trade/fill without checking current authoritative runtime receipts.",
+        "",
+        ...pieces,
+      ].join("\n\n---\n\n"),
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /**
@@ -364,6 +455,10 @@ async function loadNeoRemoteBrainBootstrapFile(params: {
     if (!response.ok) {
       const message = `NEO Brain bridge returned HTTP ${response.status}.`;
       params.warn?.(message);
+      if (response.status === 503 || response.status === 502 || response.status === 504) {
+        const canonical = await loadNeoDirectCanonicalBrainFile(params.workspaceDir);
+        if (canonical) return canonical;
+      }
       return required ? neoRemoteBrainFailureFile(params.workspaceDir, message) : null;
     }
 
@@ -417,6 +512,8 @@ async function loadNeoRemoteBrainBootstrapFile(params: {
   } catch (error) {
     const message = `NEO Brain bridge request failed: ${error instanceof Error ? error.message : String(error)}`;
     params.warn?.(message);
+    const canonical = await loadNeoDirectCanonicalBrainFile(params.workspaceDir);
+    if (canonical) return canonical;
     return required ? neoRemoteBrainFailureFile(params.workspaceDir, message) : null;
   } finally {
     clearTimeout(timeout);
