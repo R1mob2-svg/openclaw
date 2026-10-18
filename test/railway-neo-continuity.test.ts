@@ -16,7 +16,7 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(bootstrap).toContain("immediately before OpenClaw built model context");
   });
 
-  it("registers the Railway DeepSeek model through the GeminX provider bridge without copying the DeepSeek secret", () => {
+  it("registers Railway models through the GeminX provider without copying the DeepSeek secret", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
     expect(script).toContain("OPENCLAW_MODEL_PROXY_BASE_URL");
@@ -29,16 +29,16 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).not.toContain("DEEPSEEK_API_KEY");
   });
 
-  it("isolates the GeminX DeepSeek proxy from persisted direct DeepSeek credentials", () => {
+  it("routes free-first GeminX with bounded DeepSeek fallback and no persisted direct DeepSeek credentials", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
-    expect(script).toContain('agents.defaults.model.primary "geminx-deepseek/deepseek-flash"');
-    expect(script).toContain('agents.defaults.model.fallbacks "[\\\"google/gemini-3.1-flash-lite\\\"]" --strict-json');
+    expect(script).toContain('agents.defaults.model.primary "geminx-deepseek/geminx-auto"');
+    expect(script).toContain('agents.defaults.model.fallbacks "[]" --strict-json');
     expect(script).toContain('agents.defaults.thinkingDefault "off"');
     expect(script).toContain("models.providers.geminx-deepseek");
     expect(script).not.toContain('agents.defaults.model.primary "deepseek/deepseek-v4-flash"');
     expect(script).not.toContain('geminx-native-neo');
-    expect(script).toContain('agents.defaults.compaction.memoryFlush.model "geminx-deepseek/deepseek-flash"');
+    expect(script).toContain('agents.defaults.compaction.memoryFlush.model "geminx-deepseek/geminx-auto"');
   });
 
   it("pins Railway Gateway auth to the runtime token instead of a stale persisted literal", () => {
@@ -55,10 +55,10 @@ describe("Railway NEO continuity bootstrap", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
     expect(script).toContain('gateway.http.endpoints.chatCompletions.enabled true');
-    expect(script).toContain('agents.defaults.model.primary "geminx-deepseek/deepseek-flash"');
-    expect(script).toContain('agents.defaults.models "{\\\"geminx-deepseek/deepseek-flash\\\":{},\\\"google/gemini-3.1-flash-lite\\\":{},\\\"geminx-deepseek/deepseek-v4-pro\\\":{}}"');
+    expect(script).toContain('agents.defaults.model.primary "geminx-deepseek/geminx-auto"');
+    expect(script).toContain('agents.defaults.models "{\\\"geminx-deepseek/geminx-auto\\\":{},\\\"geminx-deepseek/deepseek-flash\\\":{},\\\"geminx-deepseek/deepseek-v4-pro\\\":{}}"');
     expect(script).toContain("OpenClaw is a full NEO execution runtime with its own native tool loop");
-    expect(script).toContain("GeminX provides the authenticated DeepSeek transport");
+    expect(script).toContain("GeminX provides authenticated free-first/budgeted model transport");
     expect(script).not.toContain("geminx-native-neo");
   });
 
@@ -74,7 +74,7 @@ describe("Railway NEO continuity bootstrap", () => {
   it("preemptively compacts long Railway NEO sessions before transport or provider overflow", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
-    expect(script).toContain('agents.defaults.contextTokens "96000"');
+    expect(script).toContain('agents.defaults.contextTokens "1000000"');
     expect(script).toContain('agents.defaults.compaction.reserveTokens "24000"');
     expect(script).toContain('agents.defaults.compaction.keepRecentTokens "12000"');
     expect(script).toContain('agents.defaults.compaction.maxActiveTranscriptBytes "\\"4mb\\""');
