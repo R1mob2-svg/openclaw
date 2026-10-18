@@ -106,6 +106,16 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(soul).toContain("employee handbook");
     expect(soul).toContain("Natural swearing is allowed");
     expect(soul.trim().split(/\r?\n/)).toHaveLength(1);
+    // August NEO visual training is now on the shared Brain main.
+    // The existing Railway startup installs these authoritative runtime rules,
+    // so a fresh cloud NEO knows which actual training to retrieve just-in-time.
+    expect(agents).toContain("ORIGINAL NEO DIGITAL AMBUSH IMAGE FACTORY");
+    expect(agents).toContain("Agents/NEO/Website_Mockup_Factory/V2_OPERATOR_RESUME.md");
+    expect(agents).toContain("VISUAL_QA_SCORECARD.md");
+    expect(agents).toContain("ENTREPRENUITY_AMBUSH_HOMEPAGE_IMAGE_V2");
+    expect(agents).toContain("HOLD_VISUAL_QA");
+    expect(agents).toContain("HOLD_URL_QA");
+    expect(agents).toContain("NEO_WEBSITE_MOCKUP_RECEIPT");
     expect(agents).toContain("OWNER OUTCOME FIRST");
     expect(agents).toContain("COMPLETE THE OUTCOME, NOT THE CEREMONY");
     expect(agents).toContain("REPAIR IN THE SAME RUN");
