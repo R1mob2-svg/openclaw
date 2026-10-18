@@ -92,12 +92,13 @@ node openclaw.mjs config set gateway.auth.mode "token"
 node openclaw.mjs config set gateway.auth.token '{"source":"env","provider":"default","id":"OPENCLAW_GATEWAY_TOKEN"}' --strict-json --replace
 node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/geminx-auto\":{},\"geminx-deepseek/deepseek-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{}}" --strict-json --replace
 
-# NEO cost and context profile: deliberately compact long conversations early.
-# Preserve the exact objective in durable Brain/checkpoints instead of replaying
-# a 65k-token recent tail on every continuation. This is not a heartbeat job.
+# NEO model profile: DeepSeek Flash/Pro offer a full 1M token context.
+# Advertise the true supported maximum to avoid premature truncation.
+# Cost/loop safeguards and durable brain checkpoints remain enabled; the proxy
+# reserves output headroom and can refuse expensive over-budget calls.
 # Compact long active transcripts before transport/model limits are threatened,
 # retain a useful recent tail, and re-check pressure between tool turns.
-node openclaw.mjs config set agents.defaults.contextTokens "96000" --strict-json
+node openclaw.mjs config set agents.defaults.contextTokens "1000000" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.reserveTokens "24000" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.keepRecentTokens "12000" --strict-json
 node openclaw.mjs config set agents.defaults.compaction.maxActiveTranscriptBytes "\"4mb\"" --strict-json
@@ -145,9 +146,9 @@ if (!baseUrl) process.exit(2);
 const common = {
   reasoning: true,
   input: ["text"],
-  // Keep the effective model window aligned with the GEMINX model proxy instead
-  // of advertising the provider maximum and repeatedly paying for giant contexts.
-  contextWindow: 96000,
+  // Advertise DeepSeek V4's verified 1,000,000-token capacity.
+  // The GeminX model proxy still meters calls and reserves output headroom.
+  contextWindow: 1000000,
   maxTokens: 8192,
   cost: { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0 },
   compat: {
