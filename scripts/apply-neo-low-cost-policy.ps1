@@ -17,7 +17,7 @@ $ErrorActionPreference = "Stop"
 $policy = @(
   @{ Key = "agents.defaults.heartbeat.every"; Value = "0m"; Json = $false },
   @{ Key = "agents.defaults.thinkingDefault"; Value = "off"; Json = $false },
-  @{ Key = "agents.defaults.contextTokens"; Value = "96000"; Json = $true },
+  @{ Key = "agents.defaults.contextTokens"; Value = "1000000"; Json = $true },
   @{ Key = "agents.defaults.compaction.reserveTokens"; Value = "24000"; Json = $true },
   @{ Key = "agents.defaults.compaction.keepRecentTokens"; Value = "12000"; Json = $true },
   @{ Key = "agents.defaults.compaction.maxActiveTranscriptBytes"; Value = '"4mb"'; Json = $true },
