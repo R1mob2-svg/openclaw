@@ -75,4 +75,25 @@ describe("GeminX NEO server-owned worker receipt", () => {
       events: [],
     })).toBeNull();
   });
+
+  it("does not issue a worker PASS for a chat turn with zero observed tool execution", () => {
+    vi.stubEnv("GEMINX_NEO_WORKER_RECEIPT_HMAC_SECRET", "test-shared-secret-at-least-thirty-two-bytes-long");
+    vi.stubEnv("OPENCLAW_SOURCE_COMMIT_SHA", "a".repeat(40));
+    vi.stubEnv("OPENCLAW_NEO_BRAIN_SHA", "b".repeat(40));
+    expect(testOnlyOpenAiHttp.buildGeminXNeoReceiptBundle({
+      context: {
+        objectiveId: "ambush:o",
+        taskId: "ambush_t",
+        attemptId: "attempt-1",
+        leaseFingerprint: "d".repeat(64),
+      },
+      runId: "run-chat-only",
+      sessionKey: "session-chat-only",
+      model: "openclaw/default",
+      content: "I claim I did it",
+      result: { meta: { stopReason: "stop" } },
+      events: [],
+    })).toBeNull();
+  });
+
 });
