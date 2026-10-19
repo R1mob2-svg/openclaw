@@ -678,6 +678,7 @@ async function buildGeminXNeoReceiptBundle(params: {
   content: string;
   result: unknown;
   events: GeminXNeoReceiptEvent[];
+  readMediaBufferFn?: typeof readMediaBuffer;
 }): Promise<{ worker_receipt: Record<string, unknown>; worker_artifacts_inline: Record<string, unknown>[] } | null> {
   const secret = process.env.GEMINX_NEO_WORKER_RECEIPT_HMAC_SECRET ?? "";
   const sourceCommit =
@@ -753,7 +754,8 @@ async function buildGeminXNeoReceiptBundle(params: {
       if (String(attachment.type ?? "") !== "image") continue;
       const mediaId = String(attachment.name ?? "").trim();
       if (!mediaId || imageIds.has(mediaId)) continue;
-      const stored = await readMediaBuffer(mediaId, "tool-image-generation", 25_000_000);
+      const mediaReader = params.readMediaBufferFn ?? readMediaBuffer;
+      const stored = await mediaReader(mediaId, "tool-image-generation", 25_000_000);
       const contentType = String(attachment.mimeType ?? "image/png").trim() || "image/png";
       const digest = sha256(stored.buffer);
       imageIds.add(mediaId);
