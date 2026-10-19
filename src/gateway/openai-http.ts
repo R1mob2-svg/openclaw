@@ -1,6 +1,6 @@
 // Gateway OpenAI-compatible chat completions endpoint.
 // Translates OpenAI chat requests to OpenClaw agent runs and SSE/JSON responses.
-import { randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { estimateBase64DecodedBytes } from "@openclaw/media-core/base64";
 import { resolveIntegerOption } from "@openclaw/normalization-core/number-coercion";
@@ -623,6 +623,171 @@ async function resolveImagesForRequest(
   return images;
 }
 
+
+type GeminXNeoReceiptContext = {
+  objectiveId: string;
+  taskId: string;
+  attemptId: string;
+  leaseFingerprint: string;
+};
+
+type GeminXNeoReceiptEvent = {
+  stream: string;
+  data: Record<string, unknown>;
+  ts: number;
+};
+
+function singleHeader(req: IncomingMessage, name: string): string {
+  const raw = req.headers[name.toLowerCase()];
+  return Array.isArray(raw) ? String(raw[0] ?? "").trim() : String(raw ?? "").trim();
+}
+
+function resolveGeminXNeoReceiptContext(req: IncomingMessage): GeminXNeoReceiptContext | null {
+  if (singleHeader(req, "x-geminx-neo-receipt") !== "1") return null;
+  const context = {
+    objectiveId: singleHeader(req, "x-geminx-objective-id"),
+    taskId: singleHeader(req, "x-geminx-task-id"),
+    attemptId: singleHeader(req, "x-geminx-attempt-id"),
+    leaseFingerprint: singleHeader(req, "x-geminx-lease-fingerprint"),
+  };
+  const idPattern = /^[a-zA-Z0-9_.:-]{1,160}$/;
+  if (!idPattern.test(context.objectiveId) || !idPattern.test(context.taskId) ||
+      !idPattern.test(context.attemptId) || !/^[a-f0-9]{64}$/i.test(context.leaseFingerprint)) {
+    throw new Error("invalid GeminX NEO receipt context");
+  }
+  return context;
+}
+
+function identity(value: unknown, fallback: string): string {
+  const raw = String(value ?? "").trim().replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 160);
+  return raw || fallback;
+}
+
+function sha256(value: string | Buffer): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function buildGeminXNeoReceiptBundle(params: {
+  context: GeminXNeoReceiptContext;
+  runId: string;
+  sessionKey: string;
+  model: string;
+  content: string;
+  result: unknown;
+  events: GeminXNeoReceiptEvent[];
+}): { worker_receipt: Record<string, unknown>; worker_artifacts_inline: Record<string, unknown>[] } | null {
+  const secret = process.env.GEMINX_NEO_WORKER_RECEIPT_HMAC_SECRET ?? "";
+  const sourceCommit =
+    (process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.OPENCLAW_SOURCE_COMMIT_SHA ?? "").trim();
+  const brainCommit = (process.env.OPENCLAW_NEO_BRAIN_SHA ?? "").trim();
+  if (secret.length < 32 || !/^[a-f0-9]{40}$/i.test(sourceCommit) ||
+      !/^[a-f0-9]{40}$/i.test(brainCommit)) {
+    return null;
+  }
+
+  const resultRecord =
+    params.result && typeof params.result === "object" && !Array.isArray(params.result)
+      ? params.result as Record<string, unknown>
+      : {};
+  const meta =
+    resultRecord.meta && typeof resultRecord.meta === "object" && !Array.isArray(resultRecord.meta)
+      ? resultRecord.meta as Record<string, unknown>
+      : {};
+
+  const toolReceipts: Array<{
+    tool_call_id: string;
+    tool: string;
+    status: "succeeded";
+    result_sha256: string;
+  }> = [{
+    tool_call_id: identity(params.runId, "openclaw_agent_run"),
+    tool: "openclaw_agent_run",
+    status: "succeeded",
+    result_sha256: sha256(JSON.stringify({
+      run_id: params.runId,
+      session_key: params.sessionKey,
+      model: params.model,
+      content_sha256: sha256(params.content),
+      stop_reason: meta.stopReason ?? null,
+      execution_trace: meta.executionTrace ?? null,
+      agent_meta: meta.agentMeta ?? null,
+    })),
+  }];
+
+  const seen = new Set(toolReceipts.map((row) => row.tool_call_id));
+  for (const event of params.events) {
+    const rawId = event.data.toolCallId ?? event.data.tool_call_id ?? event.data.itemId;
+    const toolId = identity(rawId, "");
+    if (!toolId || seen.has(toolId)) continue;
+    const phase = String(event.data.phase ?? "").toLowerCase();
+    const status = String(event.data.status ?? "").toLowerCase();
+    if (phase && phase !== "end" && status !== "completed" && status !== "succeeded") continue;
+    seen.add(toolId);
+    toolReceipts.push({
+      tool_call_id: toolId,
+      tool: identity(event.data.name ?? event.data.title ?? event.stream, "openclaw_tool"),
+      status: "succeeded",
+      result_sha256: sha256(JSON.stringify({ stream: event.stream, data: event.data, ts: event.ts })),
+    });
+  }
+
+  const manifest = {
+    schema_version: "entreprenuity.neo.execution-artifact.v1",
+    run_id: params.runId,
+    session_key: params.sessionKey,
+    objective_id: params.context.objectiveId,
+    task_id: params.context.taskId,
+    attempt_id: params.context.attemptId,
+    source_commit_sha: sourceCommit,
+    brain_commit_sha: brainCommit,
+    tool_receipts: toolReceipts,
+    final_text_sha256: sha256(params.content),
+    completed_at: new Date().toISOString(),
+  };
+  const artifactBytes = Buffer.from(JSON.stringify(manifest), "utf8");
+  const artifactSha = sha256(artifactBytes);
+  const completedAt = manifest.completed_at;
+  const workerRuntimeId = identity(
+    `openclaw-neo-${process.env.RAILWAY_SERVICE_ID ?? process.pid}`,
+    "openclaw-neo-runtime",
+  );
+  const unsigned = {
+    schema_version: "entreprenuity.neo.execution.v1",
+    worker_runtime_id: workerRuntimeId,
+    worker_id: "neo",
+    company_scope: "entreprenuity",
+    objective_id: params.context.objectiveId,
+    task_id: params.context.taskId,
+    lease_fingerprint: params.context.leaseFingerprint,
+    attempt_id: params.context.attemptId,
+    source_commit_sha: sourceCommit,
+    brain_commit_sha: brainCommit,
+    tool_receipts: toolReceipts,
+    artifacts: [{
+      sha256: artifactSha,
+      size_bytes: artifactBytes.length,
+      content_type: "application/json",
+    }],
+    completed_at: completedAt,
+  };
+  const signingPayload = JSON.stringify([
+    unsigned.schema_version, unsigned.worker_runtime_id, unsigned.worker_id, unsigned.company_scope,
+    unsigned.objective_id, unsigned.task_id, unsigned.lease_fingerprint, unsigned.attempt_id,
+    unsigned.source_commit_sha, unsigned.brain_commit_sha, unsigned.tool_receipts,
+    unsigned.artifacts, unsigned.completed_at,
+  ]);
+  const workerSignature = createHmac("sha256", secret).update(signingPayload).digest("hex");
+
+  return {
+    worker_receipt: { ...unsigned, worker_signature: workerSignature },
+    worker_artifacts_inline: [{
+      sha256: artifactSha,
+      content_type: "application/json",
+      content_base64: artifactBytes.toString("base64"),
+    }],
+  };
+}
+
 export const testOnlyOpenAiHttp = {
   resolveImagesForRequest,
   resolveOpenAiChatCompletionsLimits,
@@ -1056,6 +1221,29 @@ export async function handleOpenAiHttpRequest(
   }
 
   const runId = `chatcmpl_${randomUUID()}`;
+  let neoReceiptContext: GeminXNeoReceiptContext | null = null;
+  try {
+    neoReceiptContext = resolveGeminXNeoReceiptContext(req);
+  } catch (err) {
+    sendJson(res, 400, {
+      error: { message: resolveErrorMessage(err), type: "invalid_request_error" },
+    });
+    return true;
+  }
+  if (neoReceiptContext && stream) {
+    sendJson(res, 400, {
+      error: { message: "GeminX NEO worker receipts require stream=false", type: "invalid_request_error" },
+    });
+    return true;
+  }
+  const neoReceiptEvents: GeminXNeoReceiptEvent[] = [];
+  const stopNeoReceiptCapture = neoReceiptContext
+    ? onAgentEvent((evt) => {
+        if (evt.runId !== runId) return;
+        if (!["tool", "item", "command_output", "patch"].includes(String(evt.stream))) return;
+        neoReceiptEvents.push({ stream: String(evt.stream), data: evt.data, ts: evt.ts });
+      })
+    : () => {};
   const deps = createDefaultDeps();
   const abortController = new AbortController();
   const mergedExtraSystemPrompt = [prompt.extraSystemPrompt, toolChoicePrompt]
@@ -1136,6 +1324,18 @@ export async function handleOpenAiHttpRequest(
       }
       const content = resolveAgentResponseText(result);
 
+      const neoReceiptBundle = neoReceiptContext
+        ? buildGeminXNeoReceiptBundle({
+            context: neoReceiptContext,
+            runId,
+            sessionKey,
+            model,
+            content,
+            result,
+            events: neoReceiptEvents,
+          })
+        : null;
+
       sendJson(res, 200, {
         id: runId,
         object: "chat.completion",
@@ -1149,6 +1349,7 @@ export async function handleOpenAiHttpRequest(
           },
         ],
         usage,
+        ...(neoReceiptBundle ?? {}),
       });
     } catch (err) {
       if (abortController.signal.aborted) {
@@ -1171,6 +1372,7 @@ export async function handleOpenAiHttpRequest(
       });
     } finally {
       stopWatchingDisconnect();
+      stopNeoReceiptCapture();
     }
     return true;
   }
