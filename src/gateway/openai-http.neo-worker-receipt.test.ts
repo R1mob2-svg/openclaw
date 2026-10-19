@@ -1,0 +1,78 @@
+import { createHash, createHmac } from "node:crypto";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { testOnlyOpenAiHttp } from "./openai-http.js";
+
+describe("GeminX NEO server-owned worker receipt", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("signs exact execution scope and returns independently hashable inline artifact", () => {
+    vi.stubEnv("GEMINX_NEO_WORKER_RECEIPT_HMAC_SECRET", "test-shared-secret-at-least-thirty-two-bytes-long");
+    vi.stubEnv("OPENCLAW_SOURCE_COMMIT_SHA", "a".repeat(40));
+    vi.stubEnv("OPENCLAW_NEO_BRAIN_SHA", "b".repeat(40));
+    vi.stubEnv("RAILWAY_SERVICE_ID", "12345678-1234-4234-8234-123456789abc");
+
+    const bundle = testOnlyOpenAiHttp.buildGeminXNeoReceiptBundle({
+      context: {
+        objectiveId: "ambush:ambush_acme",
+        taskId: "ambush_acme",
+        attemptId: "attempt-1",
+        leaseFingerprint: "c".repeat(64),
+      },
+      runId: "chatcmpl_test-run-1",
+      sessionKey: "openai:neo:ambush",
+      model: "openclaw/default",
+      content: "Completed execution",
+      result: { meta: { stopReason: "stop", executionTrace: { runner: "embedded" } } },
+      events: [{
+        stream: "tool",
+        ts: 1,
+        data: { toolCallId: "tool-1", name: "browser", phase: "end", status: "completed" },
+      }],
+    });
+    expect(bundle).not.toBeNull();
+    const receipt = bundle!.worker_receipt as any;
+    expect(receipt.schema_version).toBe("entreprenuity.neo.execution.v1");
+    expect(receipt.objective_id).toBe("ambush:ambush_acme");
+    expect(receipt.task_id).toBe("ambush_acme");
+    expect(receipt.tool_receipts.length).toBeGreaterThanOrEqual(2);
+    expect(receipt.artifacts).toHaveLength(1);
+
+    const inline = bundle!.worker_artifacts_inline[0] as any;
+    const bytes = Buffer.from(inline.content_base64, "base64");
+    expect(createHash("sha256").update(bytes).digest("hex")).toBe(receipt.artifacts[0].sha256);
+
+    const unsigned = { ...receipt };
+    delete unsigned.worker_signature;
+    const signingPayload = JSON.stringify([
+      unsigned.schema_version, unsigned.worker_runtime_id, unsigned.worker_id, unsigned.company_scope,
+      unsigned.objective_id, unsigned.task_id, unsigned.lease_fingerprint, unsigned.attempt_id,
+      unsigned.source_commit_sha, unsigned.brain_commit_sha, unsigned.tool_receipts,
+      unsigned.artifacts, unsigned.completed_at,
+    ]);
+    const expected = createHmac(
+      "sha256",
+      "test-shared-secret-at-least-thirty-two-bytes-long"
+    ).update(signingPayload).digest("hex");
+    expect(receipt.worker_signature).toBe(expected);
+  });
+
+  it("fails closed when server signing or provenance config is absent", () => {
+    vi.stubEnv("GEMINX_NEO_WORKER_RECEIPT_HMAC_SECRET", "");
+    vi.stubEnv("OPENCLAW_SOURCE_COMMIT_SHA", "");
+    vi.stubEnv("OPENCLAW_NEO_BRAIN_SHA", "");
+    expect(testOnlyOpenAiHttp.buildGeminXNeoReceiptBundle({
+      context: {
+        objectiveId: "ambush:o",
+        taskId: "ambush_t",
+        attemptId: "attempt-1",
+        leaseFingerprint: "d".repeat(64),
+      },
+      runId: "run-1",
+      sessionKey: "session-1",
+      model: "openclaw/default",
+      content: "x",
+      result: {},
+      events: [],
+    })).toBeNull();
+  });
+});
