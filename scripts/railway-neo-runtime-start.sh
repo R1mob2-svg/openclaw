@@ -80,6 +80,10 @@ node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/geminx-a
 # Keep memory_search useful without noisy startup/auth failures by selecting
 # OpenClaw's deliberate lexical FTS-only mode instead of the default OpenAI provider.
 node openclaw.mjs config set agents.defaults.memorySearch.provider "none"
+# Digital Ambush final-image ownership stays inside the real NEO tool loop.
+# Reuse OpenClaw's native Google image_generate provider; no second image factory.
+node openclaw.mjs config set agents.defaults.imageGenerationModel.primary "google/gemini-3.1-flash-image-preview"
+node openclaw.mjs config set agents.defaults.imageGenerationModel.fallbacks "[]" --strict-json
 # OpenClaw is a full NEO execution runtime with its own native tool loop.
 # GeminX provides authenticated free-first/budgeted model transport, while the canonical Brain
 # provides identity/continuity. Do not route the default OpenClaw agent through
