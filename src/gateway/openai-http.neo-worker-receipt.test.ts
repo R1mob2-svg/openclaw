@@ -5,18 +5,19 @@ import { testOnlyOpenAiHttp } from "./openai-http.js";
 describe("GeminX NEO server-owned worker receipt", () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it("signs exact execution scope and returns independently hashable inline artifact", () => {
+  it("signs exact execution scope and returns independently hashable inline artifact", async () => {
     vi.stubEnv("GEMINX_NEO_WORKER_RECEIPT_HMAC_SECRET", "test-shared-secret-at-least-thirty-two-bytes-long");
     vi.stubEnv("OPENCLAW_SOURCE_COMMIT_SHA", "a".repeat(40));
     vi.stubEnv("OPENCLAW_NEO_BRAIN_SHA", "b".repeat(40));
     vi.stubEnv("RAILWAY_SERVICE_ID", "12345678-1234-4234-8234-123456789abc");
 
-    const bundle = testOnlyOpenAiHttp.buildGeminXNeoReceiptBundle({
+    const bundle = await testOnlyOpenAiHttp.buildGeminXNeoReceiptBundle({
       context: {
         objectiveId: "ambush:ambush_acme",
         taskId: "ambush_acme",
         attemptId: "attempt-1",
         leaseFingerprint: "c".repeat(64),
+        requireImageArtifact: false,
       },
       runId: "chatcmpl_test-run-1",
       sessionKey: "openai:neo:ambush",
@@ -61,16 +62,17 @@ describe("GeminX NEO server-owned worker receipt", () => {
     expect(receipt.worker_signature).toBe(expected);
   });
 
-  it("fails closed when server signing or provenance config is absent", () => {
+  it("fails closed when server signing or provenance config is absent", async () => {
     vi.stubEnv("GEMINX_NEO_WORKER_RECEIPT_HMAC_SECRET", "");
     vi.stubEnv("OPENCLAW_SOURCE_COMMIT_SHA", "");
     vi.stubEnv("OPENCLAW_NEO_BRAIN_SHA", "");
-    expect(testOnlyOpenAiHttp.buildGeminXNeoReceiptBundle({
+    expect(await testOnlyOpenAiHttp.buildGeminXNeoReceiptBundle({
       context: {
         objectiveId: "ambush:o",
         taskId: "ambush_t",
         attemptId: "attempt-1",
         leaseFingerprint: "d".repeat(64),
+        requireImageArtifact: false,
       },
       runId: "run-1",
       sessionKey: "session-1",
@@ -81,16 +83,17 @@ describe("GeminX NEO server-owned worker receipt", () => {
     })).toBeNull();
   });
 
-  it("does not issue a worker PASS for a chat turn with zero observed tool execution", () => {
+  it("does not issue a worker PASS for a chat turn with zero observed tool execution", async () => {
     vi.stubEnv("GEMINX_NEO_WORKER_RECEIPT_HMAC_SECRET", "test-shared-secret-at-least-thirty-two-bytes-long");
     vi.stubEnv("OPENCLAW_SOURCE_COMMIT_SHA", "a".repeat(40));
     vi.stubEnv("OPENCLAW_NEO_BRAIN_SHA", "b".repeat(40));
-    expect(testOnlyOpenAiHttp.buildGeminXNeoReceiptBundle({
+    expect(await testOnlyOpenAiHttp.buildGeminXNeoReceiptBundle({
       context: {
         objectiveId: "ambush:o",
         taskId: "ambush_t",
         attemptId: "attempt-1",
         leaseFingerprint: "d".repeat(64),
+        requireImageArtifact: false,
       },
       runId: "run-chat-only",
       sessionKey: "session-chat-only",
@@ -99,6 +102,33 @@ describe("GeminX NEO server-owned worker receipt", () => {
       result: { meta: { stopReason: "stop" } },
       events: [],
     })).toBeNull();
+  });
+
+
+  it("fails closed when Digital Ambush requires an image but NEO did not return one", async () => {
+    vi.stubEnv("GEMINX_NEO_WORKER_RECEIPT_HMAC_SECRET", "test-shared-secret-at-least-thirty-two-bytes-long");
+    vi.stubEnv("OPENCLAW_SOURCE_COMMIT_SHA", "a".repeat(40));
+    vi.stubEnv("OPENCLAW_NEO_BRAIN_SHA", "b".repeat(40));
+    const bundle = await testOnlyOpenAiHttp.buildGeminXNeoReceiptBundle({
+      context: {
+        objectiveId: "ambush:o",
+        taskId: "ambush_t",
+        attemptId: "attempt-image-required",
+        leaseFingerprint: "e".repeat(64),
+        requireImageArtifact: true,
+      },
+      runId: "run-image-required",
+      sessionKey: "session-image-required",
+      model: "openclaw/default",
+      content: "Research completed but image missing",
+      result: {},
+      events: [{
+        stream: "tool",
+        ts: 1,
+        data: { toolCallId: "tool-research-1", name: "browser", phase: "end", status: "completed" },
+      }],
+    });
+    expect(bundle).toBeNull();
   });
 
 });
