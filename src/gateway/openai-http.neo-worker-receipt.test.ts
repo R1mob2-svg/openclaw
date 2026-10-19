@@ -34,7 +34,12 @@ describe("GeminX NEO server-owned worker receipt", () => {
     expect(receipt.schema_version).toBe("entreprenuity.neo.execution.v1");
     expect(receipt.objective_id).toBe("ambush:ambush_acme");
     expect(receipt.task_id).toBe("ambush_acme");
-    expect(receipt.tool_receipts.length).toBeGreaterThanOrEqual(2);
+    expect(receipt.tool_receipts).toHaveLength(1);
+    expect(receipt.tool_receipts[0]).toMatchObject({
+      tool_call_id: "tool-1",
+      tool: "browser",
+      status: "succeeded",
+    });
     expect(receipt.artifacts).toHaveLength(1);
 
     const inline = bundle!.worker_artifacts_inline[0] as any;
