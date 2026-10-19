@@ -35,6 +35,7 @@ import {
   type InputImageSource,
 } from "../media/input-files.js";
 import { defaultRuntime } from "../runtime.js";
+import { readMediaBuffer } from "../media/store.js";
 import { resolveAssistantStreamDeltaText } from "./agent-event-assistant-text.js";
 import {
   buildAgentMessageFromConversationEntries,
@@ -629,6 +630,7 @@ type GeminXNeoReceiptContext = {
   taskId: string;
   attemptId: string;
   leaseFingerprint: string;
+  requireImageArtifact: boolean;
 };
 
 type GeminXNeoReceiptEvent = {
@@ -649,6 +651,7 @@ function resolveGeminXNeoReceiptContext(req: IncomingMessage): GeminXNeoReceiptC
     taskId: singleHeader(req, "x-geminx-task-id"),
     attemptId: singleHeader(req, "x-geminx-attempt-id"),
     leaseFingerprint: singleHeader(req, "x-geminx-lease-fingerprint"),
+    requireImageArtifact: singleHeader(req, "x-geminx-require-image-artifact") === "1",
   };
   const idPattern = /^[a-zA-Z0-9_.:-]{1,160}$/;
   if (!idPattern.test(context.objectiveId) || !idPattern.test(context.taskId) ||
@@ -667,7 +670,7 @@ function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function buildGeminXNeoReceiptBundle(params: {
+async function buildGeminXNeoReceiptBundle(params: {
   context: GeminXNeoReceiptContext;
   runId: string;
   sessionKey: string;
@@ -675,7 +678,7 @@ function buildGeminXNeoReceiptBundle(params: {
   content: string;
   result: unknown;
   events: GeminXNeoReceiptEvent[];
-}): { worker_receipt: Record<string, unknown>; worker_artifacts_inline: Record<string, unknown>[] } | null {
+}): Promise<{ worker_receipt: Record<string, unknown>; worker_artifacts_inline: Record<string, unknown>[] } | null> {
   const secret = process.env.GEMINX_NEO_WORKER_RECEIPT_HMAC_SECRET ?? "";
   const sourceCommit =
     (process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.OPENCLAW_SOURCE_COMMIT_SHA ?? "").trim();
@@ -724,6 +727,53 @@ function buildGeminXNeoReceiptBundle(params: {
     return null;
   }
 
+  const workerArtifacts: Array<{ sha256: string; size_bytes: number; content_type: string }> = [];
+  const inlineArtifacts: Array<{ sha256: string; content_type: string; content_base64: string }> = [];
+  const imageIds = new Set<string>();
+
+  for (const event of params.events) {
+    if (event.stream !== "tool" ||
+        String(event.data.phase ?? "").toLowerCase() !== "result" ||
+        String(event.data.name ?? "") !== "image_generate" ||
+        event.data.isError === true) {
+      continue;
+    }
+    const resultRecord =
+      event.data.result && typeof event.data.result === "object" && !Array.isArray(event.data.result)
+        ? event.data.result as Record<string, unknown>
+        : {};
+    const details =
+      resultRecord.details && typeof resultRecord.details === "object" && !Array.isArray(resultRecord.details)
+        ? resultRecord.details as Record<string, unknown>
+        : {};
+    const rawAttachments = Array.isArray(details.attachments) ? details.attachments : [];
+    for (const entry of rawAttachments) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+      const attachment = entry as Record<string, unknown>;
+      if (String(attachment.type ?? "") !== "image") continue;
+      const mediaId = String(attachment.name ?? "").trim();
+      if (!mediaId || imageIds.has(mediaId)) continue;
+      const stored = await readMediaBuffer(mediaId, "tool-image-generation", 25_000_000);
+      const contentType = String(attachment.mimeType ?? "image/png").trim() || "image/png";
+      const digest = sha256(stored.buffer);
+      imageIds.add(mediaId);
+      workerArtifacts.push({
+        sha256: digest,
+        size_bytes: stored.buffer.length,
+        content_type: contentType,
+      });
+      inlineArtifacts.push({
+        sha256: digest,
+        content_type: contentType,
+        content_base64: stored.buffer.toString("base64"),
+      });
+    }
+  }
+
+  if (params.context.requireImageArtifact && imageIds.size !== 1) {
+    return null;
+  }
+
   const manifest = {
     schema_version: "entreprenuity.neo.execution-artifact.v1",
     run_id: params.runId,
@@ -734,11 +784,22 @@ function buildGeminXNeoReceiptBundle(params: {
     source_commit_sha: sourceCommit,
     brain_commit_sha: brainCommit,
     tool_receipts: toolReceipts,
+    image_artifact_sha256: workerArtifacts.find((item) => item.content_type.startsWith("image/"))?.sha256 ?? null,
     final_text_sha256: sha256(params.content),
     completed_at: new Date().toISOString(),
   };
   const artifactBytes = Buffer.from(JSON.stringify(manifest), "utf8");
   const artifactSha = sha256(artifactBytes);
+  workerArtifacts.push({
+    sha256: artifactSha,
+    size_bytes: artifactBytes.length,
+    content_type: "application/json",
+  });
+  inlineArtifacts.push({
+    sha256: artifactSha,
+    content_type: "application/json",
+    content_base64: artifactBytes.toString("base64"),
+  });
   const completedAt = manifest.completed_at;
   const workerRuntimeId = identity(
     `openclaw-neo-${process.env.RAILWAY_SERVICE_ID ?? process.pid}`,
@@ -756,11 +817,7 @@ function buildGeminXNeoReceiptBundle(params: {
     source_commit_sha: sourceCommit,
     brain_commit_sha: brainCommit,
     tool_receipts: toolReceipts,
-    artifacts: [{
-      sha256: artifactSha,
-      size_bytes: artifactBytes.length,
-      content_type: "application/json",
-    }],
+    artifacts: workerArtifacts,
     completed_at: completedAt,
   };
   const signingPayload = JSON.stringify([
@@ -773,11 +830,7 @@ function buildGeminXNeoReceiptBundle(params: {
 
   return {
     worker_receipt: { ...unsigned, worker_signature: workerSignature },
-    worker_artifacts_inline: [{
-      sha256: artifactSha,
-      content_type: "application/json",
-      content_base64: artifactBytes.toString("base64"),
-    }],
+    worker_artifacts_inline: inlineArtifacts,
   };
 }
 
@@ -1319,7 +1372,7 @@ export async function handleOpenAiHttpRequest(
       const content = resolveAgentResponseText(result);
 
       const neoReceiptBundle = neoReceiptContext
-        ? buildGeminXNeoReceiptBundle({
+        ? await buildGeminXNeoReceiptBundle({
             context: neoReceiptContext,
             runId,
             sessionKey,
