@@ -792,6 +792,7 @@ export const testOnlyOpenAiHttp = {
   resolveImagesForRequest,
   resolveOpenAiChatCompletionsLimits,
   resolveChatCompletionUsage,
+  buildGeminXNeoReceiptBundle,
 };
 export { testOnlyOpenAiHttp as __testOnlyOpenAiHttp };
 
