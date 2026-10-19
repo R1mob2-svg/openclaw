@@ -699,22 +699,11 @@ function buildGeminXNeoReceiptBundle(params: {
     tool: string;
     status: "succeeded";
     result_sha256: string;
-  }> = [{
-    tool_call_id: identity(params.runId, "openclaw_agent_run"),
-    tool: "openclaw_agent_run",
-    status: "succeeded",
-    result_sha256: sha256(JSON.stringify({
-      run_id: params.runId,
-      session_key: params.sessionKey,
-      model: params.model,
-      content_sha256: sha256(params.content),
-      stop_reason: meta.stopReason ?? null,
-      execution_trace: meta.executionTrace ?? null,
-      agent_meta: meta.agentMeta ?? null,
-    })),
-  }];
+  }> = [];
 
-  const seen = new Set(toolReceipts.map((row) => row.tool_call_id));
+  // A completed chat turn is not a tool receipt. Require at least one
+  // independently observed child tool/item execution from the actual NEO run.
+  const seen = new Set<string>();
   for (const event of params.events) {
     const rawId = event.data.toolCallId ?? event.data.tool_call_id ?? event.data.itemId;
     const toolId = identity(rawId, "");
@@ -729,6 +718,10 @@ function buildGeminXNeoReceiptBundle(params: {
       status: "succeeded",
       result_sha256: sha256(JSON.stringify({ stream: event.stream, data: event.data, ts: event.ts })),
     });
+  }
+
+  if (toolReceipts.length === 0) {
+    return null;
   }
 
   const manifest = {
