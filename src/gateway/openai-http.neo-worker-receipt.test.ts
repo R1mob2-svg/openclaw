@@ -105,6 +105,84 @@ describe("GeminX NEO server-owned worker receipt", () => {
   });
 
 
+  it("binds exact NEO image bytes into the signed receipt and inline artifact bundle", async () => {
+    vi.stubEnv("GEMINX_NEO_WORKER_RECEIPT_HMAC_SECRET", "test-shared-secret-at-least-thirty-two-bytes-long");
+    vi.stubEnv("OPENCLAW_SOURCE_COMMIT_SHA", "a".repeat(40));
+    vi.stubEnv("OPENCLAW_NEO_BRAIN_SHA", "b".repeat(40));
+    const imageBytes = Buffer.from("exact-neo-generated-image-bytes");
+    const imageSha = createHash("sha256").update(imageBytes).digest("hex");
+    const readMediaBufferFn = vi.fn(async () => ({
+      id: "final-mockup.png",
+      path: "/managed/media/final-mockup.png",
+      buffer: imageBytes,
+      size: imageBytes.length,
+    }));
+
+    const bundle = await testOnlyOpenAiHttp.buildGeminXNeoReceiptBundle({
+      context: {
+        objectiveId: "ambush:o",
+        taskId: "ambush_t",
+        attemptId: "attempt-image",
+        leaseFingerprint: "e".repeat(64),
+        requireImageArtifact: true,
+      },
+      runId: "run-image",
+      sessionKey: "session-image",
+      model: "openclaw/default",
+      content: "Image generated",
+      result: {},
+      events: [
+        {
+          stream: "tool",
+          ts: 1,
+          data: {
+            toolCallId: "tool-image-1",
+            name: "image_generate",
+            phase: "result",
+            isError: false,
+            result: {
+              details: {
+                attachments: [{
+                  type: "image",
+                  name: "final-mockup.png",
+                  mimeType: "image/png",
+                  path: "/managed/media/final-mockup.png",
+                }],
+              },
+            },
+          },
+        },
+        {
+          stream: "tool",
+          ts: 2,
+          data: { toolCallId: "tool-image-1", name: "image_generate", phase: "end", status: "completed" },
+        },
+      ],
+      readMediaBufferFn,
+    });
+
+    expect(bundle).not.toBeNull();
+    expect(readMediaBufferFn).toHaveBeenCalledWith(
+      "final-mockup.png",
+      "tool-image-generation",
+      25_000_000,
+    );
+    const receipt = bundle!.worker_receipt as any;
+    expect(receipt.tool_receipts).toEqual([
+      expect.objectContaining({ tool_call_id: "tool-image-1", tool: "image_generate", status: "succeeded" }),
+    ]);
+    expect(receipt.artifacts[0]).toEqual({
+      sha256: imageSha,
+      size_bytes: imageBytes.length,
+      content_type: "image/png",
+    });
+    const inlineImage = bundle!.worker_artifacts_inline.find(
+      (artifact: any) => artifact.content_type === "image/png",
+    ) as any;
+    expect(Buffer.from(inlineImage.content_base64, "base64")).toEqual(imageBytes);
+    expect(inlineImage.sha256).toBe(imageSha);
+  });
+
   it("fails closed when Digital Ambush requires an image but NEO did not return one", async () => {
     vi.stubEnv("GEMINX_NEO_WORKER_RECEIPT_HMAC_SECRET", "test-shared-secret-at-least-thirty-two-bytes-long");
     vi.stubEnv("OPENCLAW_SOURCE_COMMIT_SHA", "a".repeat(40));
