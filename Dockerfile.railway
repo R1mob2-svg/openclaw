@@ -15,6 +15,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
+# No paid inference or network: fail build if the signed-receipt Brain
+# reference cannot be pinned to the exact canonical NEO factory doctrine.
+RUN node --test scripts/neo-verified-brain-ref.test.mjs
 RUN corepack prepare "$(node -p "require('./package.json').packageManager")" --activate
 RUN pnpm install --frozen-lockfile
 
