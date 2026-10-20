@@ -702,6 +702,56 @@ describe("createImageGenerateTool", () => {
     expect(text).not.toMatch(/^MEDIA:/m);
   });
 
+  it("keeps trusted waitForCompletion image generation inside the same tool result", async () => {
+    stubImageGenerationProviders();
+    vi.stubEnv("OPENAI_API_KEY", "openai-test");
+    taskRuntimeMocks.createRunningTaskRun.mockReturnValue({ taskId: "task-sync-image" });
+    vi.spyOn(imageGenerationRuntime, "generateImage").mockResolvedValue({
+      provider: "openai",
+      model: "gpt-image-1",
+      attempts: [],
+      ignoredOverrides: [],
+      images: [{
+        buffer: Buffer.from("sync-png"),
+        mimeType: "image/png",
+        fileName: "ambush.png",
+      }],
+    });
+    vi.spyOn(mediaStore, "saveMediaBuffer").mockResolvedValue({
+      path: "/tmp/ambush.png",
+      id: "ambush.png",
+      size: 8,
+      contentType: "image/png",
+    });
+    const scheduled: Array<() => Promise<void>> = [];
+    const tool = requireImageGenerateTool(createImageGenerateTool({
+      config: {
+        agents: {
+          defaults: {
+            imageGenerationModel: { primary: "openai/gpt-image-1" },
+          },
+        },
+      },
+      agentDir: "/tmp/agent",
+      agentSessionKey: "agent:neo:ambush:fixture",
+      scheduleBackgroundWork: (work) => scheduled.push(work),
+    }));
+
+    const result = await tool.execute("call-sync-image", {
+      prompt: "A premium homepage mockup",
+      model: "openai/gpt-image-1",
+      waitForCompletion: true,
+      outputFormat: "png",
+      aspectRatio: "16:9",
+    });
+
+    expect(scheduled).toHaveLength(0);
+    expect(resultText(result)).toContain("Generated 1 image");
+    expect(resultDetails(result).paths).toEqual(["/tmp/ambush.png"]);
+    expect(resultDetails(result).async).toBeUndefined();
+    expect(taskRuntimeMocks.completeTaskRunByRunId).toHaveBeenCalled();
+  });
+
   it("runs explicit deployment refs and preserves timeout-only image defaults", async () => {
     vi.spyOn(imageGenerationRuntime, "listRuntimeImageGenerationProviders").mockReturnValue([
       {

@@ -232,6 +232,11 @@ const ImageGenerateToolSchema = Type.Object({
       minimum: 1,
     }),
   ),
+  waitForCompletion: Type.Optional(
+    Type.Boolean({
+      description: "Trusted automation only: keep this image generation call synchronous and return the generated attachment in the same tool result.",
+    }),
+  ),
 });
 
 export function resolveImageGenerationModelConfigForTool(params: {
@@ -1030,8 +1035,9 @@ export function createImageGenerateTool(options?: {
         prompt,
         providerId: selectedProvider?.id,
       });
+      const waitForCompletion = params.waitForCompletion === true;
       const shouldDetach = Boolean(
-        taskHandle && shouldDetachMediaGenerationTask(options?.agentSessionKey),
+        !waitForCompletion && taskHandle && shouldDetachMediaGenerationTask(options?.agentSessionKey),
       );
 
       if (shouldDetach && taskHandle) {
