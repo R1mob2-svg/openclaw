@@ -836,11 +836,35 @@ async function buildGeminXNeoReceiptBundle(params: {
   };
 }
 
+// A missing signed execution receipt MUST NOT be interpreted as completion.
+// Expose only a server-computed failure code so the owning GeminX task can
+// select a safe recovery strategy without reading LLM claims as tool evidence.
+export function classifyGeminxNeoReceiptFailure(
+  events: GeminXNeoReceiptEvent[],
+  requireImageArtifact: boolean,
+): "NEO_IMAGE_PROVIDER_QUOTA_EXHAUSTED" | "NEO_IMAGE_ARTIFACT_NOT_VERIFIED" | "NEO_WORKER_EXECUTION_UNVERIFIED" {
+  if (requireImageArtifact) {
+    const imageFailures = events.filter((event) =>
+      event.stream === "tool" &&
+      String(event.data.name ?? "") === "image_generate" &&
+      event.data.isError === true,
+    );
+    if (imageFailures.some((event) =>
+      /(?:\b429\b|resource_exhausted|insufficient_quota|credit_balance_exhausted|no credits remaining|quota exhausted|current quota)/i.test(
+        JSON.stringify(event.data.result ?? event.data.error ?? event.data).slice(0, 12_000),
+      ),
+    )) return "NEO_IMAGE_PROVIDER_QUOTA_EXHAUSTED";
+    return "NEO_IMAGE_ARTIFACT_NOT_VERIFIED";
+  }
+  return "NEO_WORKER_EXECUTION_UNVERIFIED";
+}
+
 export const testOnlyOpenAiHttp = {
   resolveImagesForRequest,
   resolveOpenAiChatCompletionsLimits,
   resolveChatCompletionUsage,
   buildGeminXNeoReceiptBundle,
+  classifyGeminxNeoReceiptFailure,
 };
 export { testOnlyOpenAiHttp as __testOnlyOpenAiHttp };
 
@@ -1399,6 +1423,12 @@ export async function handleOpenAiHttpRequest(
         ],
         usage,
         ...(neoReceiptBundle ?? {}),
+        ...(neoReceiptContext && !neoReceiptBundle
+          ? { worker_blocked_code: classifyGeminxNeoReceiptFailure(
+              neoReceiptEvents,
+              neoReceiptContext.requireImageArtifact,
+            ) }
+          : {}),
       });
     } catch (err) {
       if (abortController.signal.aborted) {
