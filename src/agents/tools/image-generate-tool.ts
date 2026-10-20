@@ -921,6 +921,13 @@ export function createImageGenerateTool(options?: {
         throw new ToolInputError("No image-generation model configured.");
       }
       const explicitModelConfig = hasExplicitImageGenerationModelConfig(cfg);
+      // Digital Ambush NEO runs are spend-bounded by the signed worker contract.
+      // Never let one image_generate invocation silently walk the configured
+      // provider fallback chain (for example Google -> paid OpenAI). NEO may make
+      // a second deliberate tool attempt, and the gateway circuit owns the hard
+      // two-attempt ceiling.
+      const digitalAmbushNoProviderFallback =
+        /(?:^|:)ambush:/.test(options?.agentSessionKey ?? "");
       const effectiveCfg =
         applyImageGenerationModelConfigDefaults(cfg, imageGenerationModelConfig) ?? cfg;
       const remoteMediaSsrfPolicy = resolveRemoteMediaSsrfPolicy(effectiveCfg);
@@ -1080,7 +1087,8 @@ export function createImageGenerateTool(options?: {
               filename,
               loadedReferenceImages,
               taskHandle,
-              autoProviderFallback: explicitModelConfig ? false : undefined,
+              autoProviderFallback:
+                explicitModelConfig || digitalAmbushNoProviderFallback ? false : undefined,
             }),
         });
 
@@ -1137,7 +1145,8 @@ export function createImageGenerateTool(options?: {
           filename,
           loadedReferenceImages,
           taskHandle,
-          autoProviderFallback: explicitModelConfig ? false : undefined,
+          autoProviderFallback:
+                explicitModelConfig || digitalAmbushNoProviderFallback ? false : undefined,
         });
         completeImageGenerationTaskRun({
           handle: taskHandle,
