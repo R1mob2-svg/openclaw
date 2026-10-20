@@ -879,7 +879,7 @@ function isGeminxNeoImageQuotaFailure(event: GeminXNeoReceiptEvent): boolean {
  * exhausted providers cannot trigger an unbounded model/tool loop or a surprise
  * third paid-provider fallback.
  */
-export function terminalGeminxNeoImageFailure(
+export function terminalGeminXNeoImageFailure(
   events: GeminXNeoReceiptEvent[],
   requireImageArtifact: boolean,
   maxFailedAttempts = 2,
@@ -1371,7 +1371,7 @@ export async function handleOpenAiHttpRequest(
         if (evt.runId !== runId) return;
         if (!["tool", "item", "command_output", "patch"].includes(String(evt.stream))) return;
         neoReceiptEvents.push({ stream: String(evt.stream), data: evt.data, ts: evt.ts });
-        const terminalBlock = terminalGeminxNeoImageFailure(
+        const terminalBlock = terminalGeminXNeoImageFailure(
           neoReceiptEvents,
           neoReceiptContext.requireImageArtifact,
           2,
