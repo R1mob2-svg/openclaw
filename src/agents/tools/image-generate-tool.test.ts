@@ -807,7 +807,7 @@ describe("createImageGenerateTool", () => {
         },
       },
       agentDir: "/tmp/agent",
-      agentSessionKey: "agent:neo:ambush:fixture",
+      agentSessionKey: "agent:neo:image:fixture",
       scheduleBackgroundWork: (work) => scheduled.push(work),
     }));
 
