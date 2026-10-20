@@ -209,4 +209,87 @@ describe("GeminX NEO server-owned worker receipt", () => {
     expect(bundle).toBeNull();
   });
 
+
+  it("keeps one failed image attempt recoverable but terminates the second quota failure", () => {
+    const quotaFailure = (id: string) => ({
+      stream: "tool",
+      ts: 1,
+      data: {
+        toolCallId: id,
+        name: "image_generate",
+        phase: "result",
+        isError: true,
+        result: { error: "HTTP 429 RESOURCE_EXHAUSTED current quota exceeded" },
+      },
+    });
+    expect(testOnlyOpenAiHttp.terminalGeminXNeoImageFailure(
+      [quotaFailure("image-1")],
+      true,
+      2,
+    )).toBeNull();
+    expect(testOnlyOpenAiHttp.terminalGeminXNeoImageFailure(
+      [quotaFailure("image-1"), quotaFailure("image-2")],
+      true,
+      2,
+    )).toBe("NEO_IMAGE_PROVIDER_QUOTA_EXHAUSTED");
+  });
+
+  it("does not double-count duplicate error events for the same image tool call", () => {
+    const duplicate = {
+      stream: "tool",
+      ts: 1,
+      data: {
+        toolCallId: "image-1",
+        name: "image_generate",
+        phase: "result",
+        isError: true,
+        result: { error: "HTTP 429 RESOURCE_EXHAUSTED" },
+      },
+    };
+    expect(testOnlyOpenAiHttp.terminalGeminXNeoImageFailure(
+      [duplicate, { ...duplicate, ts: 2 }],
+      true,
+      2,
+    )).toBeNull();
+  });
+
+  it("terminates two non-quota image failures as artifact-not-verified", () => {
+    const failures = ["image-1", "image-2"].map((toolCallId, index) => ({
+      stream: "tool",
+      ts: index + 1,
+      data: {
+        toolCallId,
+        name: "image_generate",
+        phase: "result",
+        isError: true,
+        result: { error: "renderer returned no usable image attachment" },
+      },
+    }));
+    expect(testOnlyOpenAiHttp.terminalGeminXNeoImageFailure(
+      failures,
+      true,
+      2,
+    )).toBe("NEO_IMAGE_ARTIFACT_NOT_VERIFIED");
+  });
+
+  it("ignores successful image tool events when enforcing the failed-attempt circuit", () => {
+    expect(testOnlyOpenAiHttp.terminalGeminXNeoImageFailure(
+      [
+        {
+          stream: "tool",
+          ts: 1,
+          data: {
+            toolCallId: "image-ok",
+            name: "image_generate",
+            phase: "result",
+            isError: false,
+            result: { details: { attachments: [{ type: "image", name: "ok.png" }] } },
+          },
+        },
+      ],
+      true,
+      2,
+    )).toBeNull();
+  });
+
 });
