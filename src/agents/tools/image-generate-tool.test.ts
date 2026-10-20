@@ -702,6 +702,33 @@ describe("createImageGenerateTool", () => {
     expect(text).not.toMatch(/^MEDIA:/m);
   });
 
+  it("blocks non-allowlisted image providers inside Digital Ambush NEO sessions", async () => {
+    stubImageGenerationProviders();
+    vi.stubEnv("OPENAI_API_KEY", "openai-test");
+    const generateImage = vi.spyOn(imageGenerationRuntime, "generateImage");
+
+    const tool = requireImageGenerateTool(createImageGenerateTool({
+      config: {
+        agents: {
+          defaults: {
+            imageGenerationModel: { primary: "openai/gpt-image-1" },
+          },
+        },
+      },
+      agentDir: "/tmp/agent",
+      agentSessionKey: "agent:main:openai-user:geminx:ambush:ambush_paid-provider-block",
+    }));
+
+    await expect(tool.execute("call-ambush-paid-provider-block", {
+      prompt: "One homepage mockup",
+      model: "openai/gpt-image-1",
+      waitForCompletion: true,
+    })).rejects.toThrow(
+      "Digital Ambush image provider openai is not authorised by OPENCLAW_AMBUSH_IMAGE_ALLOWED_PROVIDERS.",
+    );
+    expect(generateImage).not.toHaveBeenCalled();
+  });
+
   it("disables automatic provider fallback for Digital Ambush NEO sessions", async () => {
     stubImageGenerationProviders();
     vi.stubEnv("GEMINI_API_KEY", "google-test");
