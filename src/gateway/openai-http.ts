@@ -836,24 +836,74 @@ async function buildGeminXNeoReceiptBundle(params: {
   };
 }
 
+type GeminXNeoReceiptFailureCode =
+  | "NEO_IMAGE_PROVIDER_QUOTA_EXHAUSTED"
+  | "NEO_IMAGE_ARTIFACT_NOT_VERIFIED"
+  | "NEO_WORKER_EXECUTION_UNVERIFIED";
+
+const GEMINX_NEO_IMAGE_QUOTA_RE =
+  /(?:\b429\b|resource_exhausted|insufficient_quota|credit_balance_exhausted|no credits remaining|quota exhausted|current quota)/i;
+
+function failedGeminxNeoImageEvents(events: GeminXNeoReceiptEvent[]): GeminXNeoReceiptEvent[] {
+  const seen = new Set<string>();
+  const failures: GeminXNeoReceiptEvent[] = [];
+  for (const [index, event] of events.entries()) {
+    if (
+      event.stream !== "tool" ||
+      String(event.data.name ?? "") !== "image_generate" ||
+      event.data.isError !== true
+    ) {
+      continue;
+    }
+    const rawId =
+      event.data.toolCallId ?? event.data.tool_call_id ?? event.data.itemId ?? `event-${index}`;
+    const id = String(rawId);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    failures.push(event);
+  }
+  return failures;
+}
+
+function isGeminxNeoImageQuotaFailure(event: GeminXNeoReceiptEvent): boolean {
+  return GEMINX_NEO_IMAGE_QUOTA_RE.test(
+    JSON.stringify(event.data.result ?? event.data.error ?? event.data).slice(0, 12_000),
+  );
+}
+
+/**
+ * Live circuit breaker for signed Digital Ambush worker runs.
+ *
+ * The prompt already caps image rework at two attempts, but a model instruction is
+ * not a spend control. Enforce the same ceiling in the server-owned event stream so
+ * exhausted providers cannot trigger an unbounded model/tool loop or a surprise
+ * third paid-provider fallback.
+ */
+export function terminalGeminxNeoImageFailure(
+  events: GeminXNeoReceiptEvent[],
+  requireImageArtifact: boolean,
+  maxFailedAttempts = 2,
+): Exclude<GeminXNeoReceiptFailureCode, "NEO_WORKER_EXECUTION_UNVERIFIED"> | null {
+  if (!requireImageArtifact) return null;
+  const failures = failedGeminxNeoImageEvents(events);
+  if (failures.length < Math.max(1, maxFailedAttempts)) return null;
+  return failures.some(isGeminxNeoImageQuotaFailure)
+    ? "NEO_IMAGE_PROVIDER_QUOTA_EXHAUSTED"
+    : "NEO_IMAGE_ARTIFACT_NOT_VERIFIED";
+}
+
 // A missing signed execution receipt MUST NOT be interpreted as completion.
 // Expose only a server-computed failure code so the owning GeminX task can
 // select a safe recovery strategy without reading LLM claims as tool evidence.
 export function classifyGeminxNeoReceiptFailure(
   events: GeminXNeoReceiptEvent[],
   requireImageArtifact: boolean,
-): "NEO_IMAGE_PROVIDER_QUOTA_EXHAUSTED" | "NEO_IMAGE_ARTIFACT_NOT_VERIFIED" | "NEO_WORKER_EXECUTION_UNVERIFIED" {
+): GeminXNeoReceiptFailureCode {
   if (requireImageArtifact) {
-    const imageFailures = events.filter((event) =>
-      event.stream === "tool" &&
-      String(event.data.name ?? "") === "image_generate" &&
-      event.data.isError === true,
-    );
-    if (imageFailures.some((event) =>
-      /(?:\b429\b|resource_exhausted|insufficient_quota|credit_balance_exhausted|no credits remaining|quota exhausted|current quota)/i.test(
-        JSON.stringify(event.data.result ?? event.data.error ?? event.data).slice(0, 12_000),
-      ),
-    )) return "NEO_IMAGE_PROVIDER_QUOTA_EXHAUSTED";
+    const imageFailures = failedGeminxNeoImageEvents(events);
+    if (imageFailures.some(isGeminxNeoImageQuotaFailure)) {
+      return "NEO_IMAGE_PROVIDER_QUOTA_EXHAUSTED";
+    }
     return "NEO_IMAGE_ARTIFACT_NOT_VERIFIED";
   }
   return "NEO_WORKER_EXECUTION_UNVERIFIED";
@@ -865,6 +915,7 @@ export const testOnlyOpenAiHttp = {
   resolveChatCompletionUsage,
   buildGeminXNeoReceiptBundle,
   classifyGeminxNeoReceiptFailure,
+  terminalGeminXNeoImageFailure,
 };
 export { testOnlyOpenAiHttp as __testOnlyOpenAiHttp };
 
@@ -1310,15 +1361,31 @@ export async function handleOpenAiHttpRequest(
     return true;
   }
   const neoReceiptEvents: GeminXNeoReceiptEvent[] = [];
+  const abortController = new AbortController();
+  let neoReceiptTerminalBlock: Exclude<
+    GeminXNeoReceiptFailureCode,
+    "NEO_WORKER_EXECUTION_UNVERIFIED"
+  > | null = null;
   const stopNeoReceiptCapture = neoReceiptContext
     ? onAgentEvent((evt) => {
         if (evt.runId !== runId) return;
         if (!["tool", "item", "command_output", "patch"].includes(String(evt.stream))) return;
         neoReceiptEvents.push({ stream: String(evt.stream), data: evt.data, ts: evt.ts });
+        const terminalBlock = terminalGeminxNeoImageFailure(
+          neoReceiptEvents,
+          neoReceiptContext.requireImageArtifact,
+          2,
+        );
+        if (terminalBlock && !neoReceiptTerminalBlock) {
+          neoReceiptTerminalBlock = terminalBlock;
+          // This is a server-owned spend/retry circuit, not a model decision.
+          // Abort the active agent turn as soon as the bounded image-attempt
+          // budget is exhausted so no third provider/model retry can occur.
+          abortController.abort();
+        }
       })
     : () => {};
   const deps = createDefaultDeps();
-  const abortController = new AbortController();
   const mergedExtraSystemPrompt = [prompt.extraSystemPrompt, toolChoicePrompt]
     .filter((part): part is string => Boolean(part))
     .join("\n\n");
@@ -1337,12 +1404,41 @@ export async function handleOpenAiHttpRequest(
     streamParams,
   });
 
+  const sendNeoReceiptTerminalBlock = (
+    code: Exclude<GeminXNeoReceiptFailureCode, "NEO_WORKER_EXECUTION_UNVERIFIED">,
+    usage: OpenAiChatCompletionsUsage = {
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0,
+    },
+  ) => {
+    sendJson(res, 200, {
+      id: runId,
+      object: "chat.completion",
+      created: Math.floor(Date.now() / 1000),
+      model,
+      choices: [{
+        index: 0,
+        message: { role: "assistant", content: "" },
+        finish_reason: "stop",
+      }],
+      usage,
+      worker_blocked_code: code,
+    });
+  };
+
   if (!stream) {
     const stopWatchingDisconnect = watchClientDisconnect(req, res, abortController);
     try {
       const result = await agentCommandFromIngress(commandInput, defaultRuntime, deps);
 
       if (abortController.signal.aborted) {
+        if (neoReceiptTerminalBlock) {
+          sendNeoReceiptTerminalBlock(
+            neoReceiptTerminalBlock,
+            resolveChatCompletionUsage(result),
+          );
+        }
         return true;
       }
 
@@ -1432,6 +1528,9 @@ export async function handleOpenAiHttpRequest(
       });
     } catch (err) {
       if (abortController.signal.aborted) {
+        if (neoReceiptTerminalBlock) {
+          sendNeoReceiptTerminalBlock(neoReceiptTerminalBlock);
+        }
         return true;
       }
       logWarn(`openai-compat: chat completion failed: ${String(err)}`);
