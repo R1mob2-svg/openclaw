@@ -850,7 +850,7 @@ export function classifyGeminxNeoReceiptFailure(
       event.data.isError === true,
     );
     if (imageFailures.some((event) =>
-      /(?:\\b429\\b|resource_exhausted|insufficient_quota|credit_balance_exhausted|no credits remaining|quota exhausted|current quota)/i.test(
+      /(?:\b429\b|resource_exhausted|insufficient_quota|credit_balance_exhausted|no credits remaining|quota exhausted|current quota)/i.test(
         JSON.stringify(event.data.result ?? event.data.error ?? event.data).slice(0, 12_000),
       ),
     )) return "NEO_IMAGE_PROVIDER_QUOTA_EXHAUSTED";
