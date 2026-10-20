@@ -1256,6 +1256,17 @@ function resolveCooldownDecision(params: {
   };
 }
 
+/** Founder-wide gate: expensive strategy models MUST NOT run the agent tool loop.
+ * Applies at the shared candidate dispatch boundary to Railway and local OpenClaw.
+ * Pro consultation is a separate bounded, tool-free operation, never a fallback.
+ */
+export function isThinkOnlyStrategistModel(provider: string, model: string): boolean {
+  const normalizedProvider = provider.trim().toLowerCase();
+  const normalizedModel = model.trim().toLowerCase();
+  return /(?:^|[/-])(?:deepseek-v4(?:\\.1)?-pro|gpt-6-astra|astra-pro)(?:$|[/-])/.test(normalizedModel) ||
+    (normalizedProvider.includes("deepseek") && /^deepseek(?:-v\\d+(?:\\.\\d+)?)?-pro$/.test(normalizedModel));
+}
+
 export async function runWithModelFallback<T>(
   params: {
     cfg: OpenClawConfig | undefined;
@@ -1284,13 +1295,19 @@ export async function runWithModelFallback<T>(
     abortSignal?: AbortSignal;
   } & ModelManifestNormalizationContext,
 ): Promise<ModelFallbackRunResult<T>> {
+  // Never allow a Pro/Astra candidate to become the executing agent model,
+  // including via fallback during quota/provider failures. Preserve the
+  // configured Flash/free candidates without silently spending on strategists.
   const candidates = resolveModelCandidateChain({
     cfg: params.cfg,
     provider: params.provider,
     model: params.model,
     fallbacksOverride: params.fallbacksOverride,
     manifestPlugins: params.manifestPlugins,
-  });
+  }).filter((candidate) => !isThinkOnlyStrategistModel(candidate.provider, candidate.model));
+  if (candidates.length === 0) {
+    throw new Error("THINK_ONLY_PRO_NO_FLASH_EXECUTOR: Configure an authorised Flash executor; Pro cannot run tools.");
+  }
   const authRuntime =
     !params.skipAuthProfileRuntime && params.cfg && hasAnyAuthProfileStoreSource(params.agentDir)
       ? await loadModelFallbackAuthRuntime()
