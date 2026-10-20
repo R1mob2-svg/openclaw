@@ -1263,8 +1263,8 @@ function resolveCooldownDecision(params: {
 export function isThinkOnlyStrategistModel(provider: string, model: string): boolean {
   const normalizedProvider = provider.trim().toLowerCase();
   const normalizedModel = model.trim().toLowerCase();
-  return /(?:^|[/-])(?:deepseek-v4(?:\\.1)?-pro|gpt-6-astra|astra-pro)(?:$|[/-])/.test(normalizedModel) ||
-    (normalizedProvider.includes("deepseek") && /^deepseek(?:-v\\d+(?:\\.\\d+)?)?-pro$/.test(normalizedModel));
+  return /(?:^|[/-])(?:deepseek-v4(?:\.1)?-pro|gpt-6-astra|astra-pro)(?:$|[/-])/.test(normalizedModel) ||
+    (normalizedProvider.includes("deepseek") && /^deepseek(?:-v\d+(?:\.\d+)?)?-pro$/.test(normalizedModel));
 }
 
 export async function runWithModelFallback<T>(
