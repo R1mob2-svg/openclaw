@@ -965,6 +965,19 @@ export function createImageGenerateTool(options?: {
         explicitModelRef,
         primaryModelRef,
       });
+      if (digitalAmbushNoProviderFallback && selectedProvider?.id) {
+        const allowedProviders = new Set(
+          (process.env.OPENCLAW_AMBUSH_IMAGE_ALLOWED_PROVIDERS ?? "google")
+            .split(",")
+            .map((provider) => provider.trim().toLowerCase())
+            .filter(Boolean),
+        );
+        if (!allowedProviders.has(selectedProvider.id.toLowerCase())) {
+          throw new ToolInputError(
+            `Digital Ambush image provider ${selectedProvider.id} is not authorised by OPENCLAW_AMBUSH_IMAGE_ALLOWED_PROVIDERS.`,
+          );
+        }
+      }
       const count = resolveRequestedCount(params);
       const requestKey = buildMediaGenerationRequestKey({
         tool: "image_generate",
