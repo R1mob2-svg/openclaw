@@ -64,6 +64,20 @@ NEO_CANONICAL_CONTINUITY_POINTER_V1
 EOF
 fi
 
+# Record the pinned canonical Brain commit only after validating the factory
+# rules actually present at that exact GitHub revision. This is boot-reference
+# evidence; the later worker tool events prove execution separately.
+# If private Brain cannot be verified, keep NEO online but FAIL CLOSED on
+# server-signed Digital Ambush completion receipts. Never invent a SHA.
+unset OPENCLAW_NEO_BRAIN_SHA
+verified_neo_brain_sha="$(node scripts/neo-verified-brain-ref.mjs 2>/dev/null)" || verified_neo_brain_sha=""
+if [ -n "$verified_neo_brain_sha" ]; then
+  export OPENCLAW_NEO_BRAIN_SHA="$verified_neo_brain_sha"
+  echo "[neo-brain] receipt_reference_verified sha_prefix=$(printf "%.12s" "$verified_neo_brain_sha")"
+else
+  echo "[neo-brain] receipt_reference_unavailable: fail-closed for signed worker receipts"
+fi
+
 node openclaw.mjs config set agents.defaults.workspace "$workspace"
 node openclaw.mjs config set agents.defaults.heartbeat.every "0m"
 node openclaw.mjs config set agents.defaults.model.primary "geminx-deepseek/geminx-auto"
