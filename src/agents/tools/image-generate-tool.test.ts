@@ -702,6 +702,80 @@ describe("createImageGenerateTool", () => {
     expect(text).not.toMatch(/^MEDIA:/m);
   });
 
+  it("blocks non-allowlisted image providers inside Digital Ambush NEO sessions", async () => {
+    stubImageGenerationProviders();
+    vi.stubEnv("OPENAI_API_KEY", "openai-test");
+    const generateImage = vi.spyOn(imageGenerationRuntime, "generateImage");
+
+    const tool = requireImageGenerateTool(createImageGenerateTool({
+      config: {
+        agents: {
+          defaults: {
+            imageGenerationModel: { primary: "openai/gpt-image-1" },
+          },
+        },
+      },
+      agentDir: "/tmp/agent",
+      agentSessionKey: "agent:main:openai-user:geminx:ambush:ambush_paid-provider-block",
+    }));
+
+    await expect(tool.execute("call-ambush-paid-provider-block", {
+      prompt: "One homepage mockup",
+      model: "openai/gpt-image-1",
+      waitForCompletion: true,
+    })).rejects.toThrow(
+      "Digital Ambush image provider openai is not authorised by OPENCLAW_AMBUSH_IMAGE_ALLOWED_PROVIDERS.",
+    );
+    expect(generateImage).not.toHaveBeenCalled();
+  });
+
+  it("disables automatic provider fallback for Digital Ambush NEO sessions", async () => {
+    stubImageGenerationProviders();
+    vi.stubEnv("GEMINI_API_KEY", "google-test");
+    vi.stubEnv("OPENAI_API_KEY", "openai-test");
+    taskRuntimeMocks.createRunningTaskRun.mockReturnValue({ taskId: "task-ambush-no-fallback" });
+    const generateImage = vi.spyOn(imageGenerationRuntime, "generateImage").mockResolvedValue({
+      provider: "google",
+      model: "gemini-3.1-flash-image-preview",
+      attempts: [],
+      ignoredOverrides: [],
+      images: [{
+        buffer: Buffer.from("ambush-png"),
+        mimeType: "image/png",
+        fileName: "ambush.png",
+      }],
+    });
+    vi.spyOn(mediaStore, "saveMediaBuffer").mockResolvedValue({
+      path: "/tmp/ambush.png",
+      id: "ambush.png",
+      size: 10,
+      contentType: "image/png",
+    });
+
+    const tool = requireImageGenerateTool(createImageGenerateTool({
+      config: {
+        agents: {
+          defaults: {
+            model: { primary: "google/gemini-3.1-pro-preview" },
+          },
+        },
+      },
+      agentDir: "/tmp/agent",
+      agentSessionKey: "agent:main:openai-user:geminx:ambush:ambush_test-company",
+    }));
+
+    await tool.execute("call-ambush-no-fallback", {
+      prompt: "One founder-locked homepage mockup",
+      waitForCompletion: true,
+      outputFormat: "png",
+      aspectRatio: "16:9",
+    });
+
+    const generateArgs = mockCallArg(generateImage, 0, "generateImage");
+    expect(generateArgs.autoProviderFallback).toBe(false);
+    expect(generateArgs.modelOverride).toBeUndefined();
+  });
+
   it("keeps trusted waitForCompletion image generation inside the same tool result", async () => {
     stubImageGenerationProviders();
     vi.stubEnv("OPENAI_API_KEY", "openai-test");
@@ -733,7 +807,7 @@ describe("createImageGenerateTool", () => {
         },
       },
       agentDir: "/tmp/agent",
-      agentSessionKey: "agent:neo:ambush:fixture",
+      agentSessionKey: "agent:neo:image:fixture",
       scheduleBackgroundWork: (work) => scheduled.push(work),
     }));
 
