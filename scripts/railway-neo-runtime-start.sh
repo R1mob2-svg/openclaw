@@ -96,7 +96,7 @@ node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/geminx-a
 node openclaw.mjs config set agents.defaults.memorySearch.provider "none"
 # Digital Ambush final-image ownership stays inside the real NEO tool loop.
 # Reuse OpenClaw's native Google image_generate provider; no second image factory.
-node openclaw.mjs config set agents.defaults.imageGenerationModel.primary "google/gemini-3.1-flash-image-preview"
+node openclaw.mjs config set agents.defaults.imageGenerationModel.primary "google/gemini-3.1-flash-image"
 node openclaw.mjs config set agents.defaults.imageGenerationModel.fallbacks "[]" --strict-json
 # OpenClaw is a full NEO execution runtime with its own native tool loop.
 # GeminX provides authenticated free-first/budgeted model transport, while the canonical Brain
