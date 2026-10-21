@@ -87,8 +87,8 @@ function stubImageGenerationProviders() {
   vi.spyOn(imageGenerationRuntime, "listRuntimeImageGenerationProviders").mockReturnValue([
     {
       id: "google",
-      defaultModel: "gemini-3.1-flash-image-preview",
-      models: ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"],
+      defaultModel: "gemini-3.1-flash-image",
+      models: ["gemini-3.1-flash-image", "gemini-3-pro-image"],
       isConfigured: () => hasStubbedImageProviderAuth("google"),
       capabilities: {
         generate: {
@@ -219,7 +219,7 @@ function stubEditedImageFlow(params?: { width?: number; height?: number }) {
   // shaping, provider choice, and saved-media metadata.
   const generateImage = vi.spyOn(imageGenerationRuntime, "generateImage").mockResolvedValue({
     provider: "google",
-    model: "gemini-3-pro-image-preview",
+    model: "gemini-3-pro-image",
     attempts: [],
     ignoredOverrides: [],
     images: [
@@ -565,7 +565,7 @@ describe("createImageGenerateTool", () => {
         },
       }),
     ).toEqual({
-      primary: "google/gemini-3.1-flash-image-preview",
+      primary: "google/gemini-3.1-flash-image",
       fallbacks: ["openai/gpt-image-1"],
     });
   });
@@ -736,7 +736,7 @@ describe("createImageGenerateTool", () => {
     taskRuntimeMocks.createRunningTaskRun.mockReturnValue({ taskId: "task-ambush-no-fallback" });
     const generateImage = vi.spyOn(imageGenerationRuntime, "generateImage").mockResolvedValue({
       provider: "google",
-      model: "gemini-3.1-flash-image-preview",
+      model: "gemini-3.1-flash-image",
       attempts: [],
       ignoredOverrides: [],
       images: [{
@@ -1339,7 +1339,7 @@ describe("createImageGenerateTool", () => {
           agents: {
             defaults: {
               imageGenerationModel: {
-                primary: "gemini-3-pro-image-preview",
+                primary: "gemini-3-pro-image",
               },
             },
           },
@@ -1384,7 +1384,7 @@ describe("createImageGenerateTool", () => {
     const result = await tool.execute("call-provider-qualified-repeat", {
       prompt: "Already generated proof image",
       filename: "proof.png",
-      model: "google/gemini-3-pro-image-preview",
+      model: "google/gemini-3-pro-image",
     });
 
     expect(scheduled).toHaveLength(1);
@@ -1409,7 +1409,7 @@ describe("createImageGenerateTool", () => {
       });
     vi.spyOn(imageGenerationRuntime, "generateImage").mockResolvedValue({
       provider: "google",
-      model: "gemini-3.1-flash-image-preview",
+      model: "gemini-3.1-flash-image",
       attempts: [],
       ignoredOverrides: [],
       images: [],
@@ -1421,7 +1421,7 @@ describe("createImageGenerateTool", () => {
           agents: {
             defaults: {
               imageGenerationModel: {
-                primary: "google/gemini-3.1-flash-image-preview",
+                primary: "google/gemini-3.1-flash-image",
               },
             },
           },
@@ -1437,7 +1437,7 @@ describe("createImageGenerateTool", () => {
     await tool.execute("call-first-model", {
       prompt: "Already generated proof image",
       filename: "proof.png",
-      model: "gemini-3.1-flash-image-preview",
+      model: "gemini-3.1-flash-image",
     });
     const firstTask = mockCallArg(taskRuntimeMocks.createRunningTaskRun, 0, "createRunningTaskRun");
     taskRuntimeInternalMocks.listTasksForOwnerKey.mockReturnValue([
@@ -1463,7 +1463,7 @@ describe("createImageGenerateTool", () => {
     const result = await tool.execute("call-second-model", {
       prompt: "Already generated proof image",
       filename: "proof.png",
-      model: "gemini-3-pro-image-preview",
+      model: "gemini-3-pro-image",
     });
 
     expect(scheduled).toHaveLength(2);
@@ -1750,8 +1750,8 @@ describe("createImageGenerateTool", () => {
     vi.spyOn(imageGenerationRuntime, "listRuntimeImageGenerationProviders").mockReturnValue([
       {
         id: "google",
-        defaultModel: "gemini-3.1-flash-image-preview",
-        models: ["gemini-3.1-flash-image-preview"],
+        defaultModel: "gemini-3.1-flash-image",
+        models: ["gemini-3.1-flash-image"],
         capabilities: {
           generate: {
             maxCount: 4,
@@ -1776,7 +1776,7 @@ describe("createImageGenerateTool", () => {
     ]);
     vi.spyOn(imageGenerationRuntime, "generateImage").mockResolvedValue({
       provider: "google",
-      model: "gemini-3.1-flash-image-preview",
+      model: "gemini-3.1-flash-image",
       attempts: [],
       ignoredOverrides: [],
       images: [
@@ -1799,7 +1799,7 @@ describe("createImageGenerateTool", () => {
         config: {
           agents: {
             defaults: {
-              imageGenerationModel: { primary: "google/gemini-3.1-flash-image-preview" },
+              imageGenerationModel: { primary: "google/gemini-3.1-flash-image" },
             },
           },
         },
@@ -1823,8 +1823,8 @@ describe("createImageGenerateTool", () => {
     vi.spyOn(imageGenerationRuntime, "listRuntimeImageGenerationProviders").mockReturnValue([
       {
         id: "google",
-        defaultModel: "gemini-3.1-flash-image-preview",
-        models: ["gemini-3.1-flash-image-preview"],
+        defaultModel: "gemini-3.1-flash-image",
+        models: ["gemini-3.1-flash-image"],
         capabilities: {
           generate: {
             maxCount: 4,
@@ -1853,7 +1853,7 @@ describe("createImageGenerateTool", () => {
           agents: {
             defaults: {
               imageGenerationModel: {
-                primary: "google/gemini-3.1-flash-image-preview",
+                primary: "google/gemini-3.1-flash-image",
               },
             },
           },
@@ -1869,7 +1869,7 @@ describe("createImageGenerateTool", () => {
   it.each([2.5, "2cats", null])("rejects malformed image count %s", async (count) => {
     const generateImage = vi.spyOn(imageGenerationRuntime, "generateImage").mockResolvedValue({
       provider: "google",
-      model: "gemini-3.1-flash-image-preview",
+      model: "gemini-3.1-flash-image",
       attempts: [],
       ignoredOverrides: [],
       images: [
@@ -1887,7 +1887,7 @@ describe("createImageGenerateTool", () => {
       contentType: "image/png",
     });
 
-    const tool = createToolWithPrimaryImageModel("google/gemini-3.1-flash-image-preview");
+    const tool = createToolWithPrimaryImageModel("google/gemini-3.1-flash-image");
     await expect(
       tool.execute("call-fractional-count", {
         prompt: "A cat wearing sunglasses",
@@ -1899,7 +1899,7 @@ describe("createImageGenerateTool", () => {
 
   it("forwards reference images and inferred resolution for edit mode", async () => {
     const generateImage = stubEditedImageFlow({ width: 3200, height: 1800 });
-    const tool = createToolWithPrimaryImageModel("google/gemini-3-pro-image-preview", {
+    const tool = createToolWithPrimaryImageModel("google/gemini-3-pro-image", {
       workspaceDir: process.cwd(),
     });
 
@@ -1921,7 +1921,7 @@ describe("createImageGenerateTool", () => {
 
   it("accepts managed inbound reference images for edit mode", async () => {
     stubEditedImageFlow({ width: 1024, height: 1024 });
-    const tool = createToolWithPrimaryImageModel("google/gemini-3-pro-image-preview", {
+    const tool = createToolWithPrimaryImageModel("google/gemini-3-pro-image", {
       workspaceDir: process.cwd(),
     });
 
@@ -1946,7 +1946,7 @@ describe("createImageGenerateTool", () => {
       createImageGenerateTool({
         config: {
           agents: {
-            defaults: { imageGenerationModel: { primary: "google/gemini-3-pro-image-preview" } },
+            defaults: { imageGenerationModel: { primary: "google/gemini-3-pro-image" } },
           },
         },
         workspaceDir: process.cwd(),
@@ -1969,7 +1969,7 @@ describe("createImageGenerateTool", () => {
       createImageGenerateTool({
         config: {
           agents: {
-            defaults: { imageGenerationModel: { primary: "google/gemini-3-pro-image-preview" } },
+            defaults: { imageGenerationModel: { primary: "google/gemini-3-pro-image" } },
           },
           tools: { web: { fetch: { ssrfPolicy: { allowRfc2544BenchmarkRange: true } } } },
         },
@@ -2005,7 +2005,7 @@ describe("createImageGenerateTool", () => {
           agents: {
             defaults: {
               imageGenerationModel: {
-                primary: "google/gemini-3-pro-image-preview",
+                primary: "google/gemini-3-pro-image",
               },
               mediaMaxMb: Number.POSITIVE_INFINITY,
             },
@@ -2111,7 +2111,7 @@ describe("createImageGenerateTool", () => {
 
   it("forwards explicit aspect ratio and supports up to 5 reference images", async () => {
     const generateImage = stubEditedImageFlow();
-    const tool = createToolWithPrimaryImageModel("google/gemini-3-pro-image-preview", {
+    const tool = createToolWithPrimaryImageModel("google/gemini-3-pro-image", {
       workspaceDir: process.cwd(),
     });
 
@@ -2332,7 +2332,7 @@ describe("createImageGenerateTool", () => {
           agents: {
             defaults: {
               imageGenerationModel: {
-                primary: "google/gemini-3-pro-image-preview",
+                primary: "google/gemini-3-pro-image",
               },
             },
           },
@@ -2356,7 +2356,7 @@ describe("createImageGenerateTool", () => {
           agents: {
             defaults: {
               imageGenerationModel: {
-                primary: "google/gemini-3.1-flash-image-preview",
+                primary: "google/gemini-3.1-flash-image",
               },
             },
           },
@@ -2367,9 +2367,9 @@ describe("createImageGenerateTool", () => {
     const result = await tool.execute("call-list", { action: "list" });
     const text = resultText(result);
 
-    expect(text).toContain("google (default gemini-3.1-flash-image-preview)");
-    expect(text).toContain("gemini-3.1-flash-image-preview");
-    expect(text).toContain("gemini-3-pro-image-preview");
+    expect(text).toContain("google (default gemini-3.1-flash-image)");
+    expect(text).toContain("gemini-3.1-flash-image");
+    expect(text).toContain("gemini-3-pro-image");
     expect(text).toContain("auth: set GEMINI_API_KEY / GOOGLE_API_KEY to use google/*");
     expect(text).toContain(
       "auth: set OPENAI_API_KEY or configure OpenAI Codex OAuth for openai/gpt-image-2",
@@ -2383,11 +2383,11 @@ describe("createImageGenerateTool", () => {
     if (!googleProvider || !openaiProvider) {
       throw new Error("Expected google and openai provider details");
     }
-    expect(googleProvider.defaultModel).toBe("gemini-3.1-flash-image-preview");
+    expect(googleProvider.defaultModel).toBe("gemini-3.1-flash-image");
     expect(googleProvider.authEnvVars).toEqual(["GEMINI_API_KEY", "GOOGLE_API_KEY"]);
     expect(googleProvider.models).toEqual([
-      "gemini-3.1-flash-image-preview",
-      "gemini-3-pro-image-preview",
+      "gemini-3.1-flash-image",
+      "gemini-3-pro-image",
     ]);
     const googleCapabilities = requireRecord(googleProvider.capabilities, "google capabilities");
     expect(googleCapabilities.edit).toEqual({

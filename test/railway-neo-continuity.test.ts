@@ -114,4 +114,18 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(agents).toContain("geminx-deepseek/deepseek-v4-pro");
     expect(agents).toContain("Do not treat transport, auth, timeout, rate-limit or billing failure as evidence");
   });
+  it("pins supported Google GA image model names instead of retired June 2026 previews", () => {
+    const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
+    const plugin = fs.readFileSync("extensions/google/index.ts", "utf8");
+    const provider = fs.readFileSync("extensions/google/image-generation-provider.ts", "utf8");
+    expect(script).toContain('imageGenerationModel.primary "google/gemini-3.1-flash-image"');
+    expect(script).toContain('agents.defaults.imageGenerationModel.fallbacks "[]" --strict-json');
+    expect(plugin).toContain('defaultModel: "gemini-3.1-flash-image"');
+    expect(provider).toContain('const DEFAULT_GOOGLE_IMAGE_MODEL = "gemini-3.1-flash-image"');
+    for (const source of [script, plugin, provider]) {
+      expect(source).not.toContain("gemini-3.1-flash-image-preview");
+      expect(source).not.toContain("gemini-3-pro-image-preview");
+    }
+  });
+
 });
