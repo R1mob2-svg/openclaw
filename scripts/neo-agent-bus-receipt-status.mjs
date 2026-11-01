@@ -11,6 +11,6 @@ export function classifyNeoBusReply(responseText) {
   if (declared === "FAILED") return "FAILED";
   if (declared === "BLOCKED" || declared === "WAITING_HUMAN") return "BLOCKED";
   if (declared !== "COMPLETED" && declared !== "DONE") return "BLOCKED";
-  const receipt = /\b(?:receipt[_\s-]?id|verification[_\s-]?receipt|test[_\s-]?exit[_\s-]?code)\s*[:=]\s*[\w./:#-]{4,}/i;
+  const receipt = /\b(?:receipt[_\s-]?id|verification[_\s-]?receipt|test[_\s-]?exit[_\s-]?code)\s*[:=]\s*(?:`{1,3}|\*{1,2})?[\w./:#-]{4,}/i;
   return receipt.test(body) ? "COMPLETED" : "BLOCKED";
 }
