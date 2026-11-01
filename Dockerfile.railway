@@ -18,6 +18,8 @@ COPY . .
 # No paid inference or network: fail build if the signed-receipt Brain
 # reference cannot be pinned to the exact canonical NEO factory doctrine.
 RUN node --test scripts/neo-verified-brain-ref.test.mjs
+# Verify NEO credential selection and terminal receipt truth on every production build.
+RUN node --test test/neo-github-auth-preflight.test.mjs test/neo-agent-bus-receipt-status.test.mjs
 RUN corepack prepare "$(node -p "require('./package.json').packageManager")" --activate
 RUN pnpm install --frozen-lockfile
 

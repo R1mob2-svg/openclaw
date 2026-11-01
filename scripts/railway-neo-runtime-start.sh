@@ -70,6 +70,30 @@ fi
 # If private Brain cannot be verified, keep NEO online but FAIL CLOSED on
 # server-signed Digital Ambush completion receipts. Never invent a SHA.
 unset OPENCLAW_NEO_BRAIN_SHA
+# Resolve private-source access using existing Railway secrets, without printing
+# or persisting token values. The bus can use GH_TOKEN while a stale GITHUB_PAT
+# breaks NEO's shell tools; both must share the validated identity.
+neo_github_source="$(node scripts/neo-github-auth-preflight.mjs 2>/dev/null)" || neo_github_source=""
+case "$neo_github_source" in
+  GH_TOKEN) export GITHUB_PAT="$GH_TOKEN" ;;
+  GEMINX_REPO_ACCESS_TOKEN)
+    export GH_TOKEN="$GEMINX_REPO_ACCESS_TOKEN"
+    export GITHUB_PAT="$GH_TOKEN"
+    ;;
+  GITHUB_TOKEN)
+    export GH_TOKEN="$GITHUB_TOKEN"
+    export GITHUB_PAT="$GH_TOKEN"
+    ;;
+  GITHUB_PAT) export GH_TOKEN="$GITHUB_PAT" ;;
+esac
+if [ -n "$neo_github_source" ]; then
+  export GIT_ASKPASS="/app/scripts/neo-git-askpass.sh"
+  export GIT_TERMINAL_PROMPT=0
+  echo "[neo-github] code_access=verified source=$neo_github_source"
+else
+  echo "[neo-github] code_access=unavailable: no configured token could read geminx-v2"
+fi
+
 verified_neo_brain_sha="$(node scripts/neo-verified-brain-ref.mjs 2>/dev/null)" || verified_neo_brain_sha=""
 if [ -n "$verified_neo_brain_sha" ]; then
   export OPENCLAW_NEO_BRAIN_SHA="$verified_neo_brain_sha"

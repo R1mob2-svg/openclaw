@@ -1,3 +1,4 @@
+import { classifyNeoBusReply } from "./neo-agent-bus-receipt-status.mjs";
 import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 
@@ -299,6 +300,7 @@ function promptForNeoBusMessage(message) {
     "Do not ask Rob to point you at a repo/service when current tools or the canonical Brain can resolve it.",
     "Do not claim PASS without mechanical evidence. After any repair, rerun the same failed probe.",
     "Return a concise terminal receipt with status, evidence, remaining blocker if any, and next action.",
+    "End with FINAL STATUS: COMPLETED and receipt_id: <verifiable-id> only after actual objective verification. For unfinished or blocked work, use FINAL STATUS: BLOCKED or FINAL STATUS: FAILED.",
     "",
     "PAYLOAD:",
     payload,
@@ -385,7 +387,7 @@ async function dispatchNeoMessage(repo, issue, token, message) {
     const body = await response.json();
     terminalText = boundedReceiptText(body?.choices?.[0]?.message?.content ?? "");
     if (!terminalText) throw new Error("gateway_empty_response");
-    terminalStatus = "COMPLETED";
+    terminalStatus = classifyNeoBusReply(terminalText);
 
     atomicWrite(receiptFile, {
       schema_version: "openclaw.neo-agent-message-bus-receipt.v1",
