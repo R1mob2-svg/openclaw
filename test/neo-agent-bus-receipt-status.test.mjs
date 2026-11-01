@@ -14,6 +14,6 @@ describe("Cloud Neo bus no-false-green classification", () => {
     assert.equal(classifyNeoBusReply("FINAL STATUS: COMPLETED"), "BLOCKED");
     assert.equal(classifyNeoBusReply("FINAL STATUS: COMPLETED\nPR: https://github.com/a/b/pull/1"), "BLOCKED");
     assert.equal(classifyNeoBusReply("FINAL STATUS: COMPLETED\nreceipt_id: verified-12345678"), "COMPLETED");
-    assert.equal(classifyNeoBusReply("STATUS: DONE\nTest exit code: 0"), "COMPLETED");
+    assert.equal(classifyNeoBusReply("STATUS: DONE\nTest exit code: 0"), "BLOCKED");
   });
 });
