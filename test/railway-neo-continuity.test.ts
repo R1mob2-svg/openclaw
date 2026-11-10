@@ -177,4 +177,31 @@ describe("Railway NEO continuity bootstrap", () => {
     }
   });
 
+
+  it("skips already persisted NEO configuration without running the heavy CLI", () => {
+    const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
+    expect(script).toContain("neo_config_set() {");
+    expect(script).toContain('node openclaw.mjs config set "$@"');
+    const source = /if node --input-type=module - "\$@" <<'NEO_CONFIG_MATCH'\n([\s\S]*?)\nNEO_CONFIG_MATCH/.exec(script)?.[1];
+    expect(source).toBeTruthy();
+    const tmp = fs.mkdtempSync("/tmp/neo-config-fastpath-");
+    const config = tmp + "/openclaw.json";
+    fs.writeFileSync(config, '{ agents: { defaults: { model: { primary: "geminx-deepseek/deepseek-flash" }, heartbeat: { every: "0m" } } } }');
+    const probe = (key: string, value: string) =>
+      spawnSync(process.execPath, ["--input-type=module", "-", key, value], {
+        input: source! + "\n",
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: {...process.env, OPENCLAW_CONFIG_PATH: config}
+      });
+    try {
+      expect(probe("agents.defaults.model.primary", "geminx-deepseek/deepseek-flash").status).toBe(0);
+      expect(probe("agents.defaults.heartbeat.every", "0m").status).toBe(0);
+      expect(probe("agents.defaults.model.primary", "wrong-provider").status).toBe(1);
+      expect(probe("agents.defaults.nonexistent", "secret").status).toBe(1);
+    } finally {
+      fs.rmSync(tmp, {recursive: true, force: true});
+    }
+  });
+
 });
