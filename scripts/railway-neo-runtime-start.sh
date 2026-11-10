@@ -106,10 +106,51 @@ else
   echo "[neo-brain] receipt_reference_unavailable: fail-closed for signed worker receipts"
 fi
 
-node openclaw.mjs config set agents.defaults.workspace "$workspace"
-node openclaw.mjs config set agents.defaults.heartbeat.every "0m"
-node openclaw.mjs config set agents.defaults.model.primary "geminx-deepseek/deepseek-flash"
-node openclaw.mjs config set agents.defaults.model.fallbacks "[]" --strict-json
+# Avoid restarting the entire OpenClaw config parser for unchanged values.
+# This is read-only; the native CLI still performs every real write and validates.
+neo_config_set() {
+  if node --input-type=module - "$@" <<'NEO_CONFIG_MATCH'
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import JSON5 from "json5";
+try {
+  const key = process.argv[2];
+  const raw = process.argv[3];
+  const strict = process.argv.slice(4).includes("--strict-json");
+  if (!key || raw === undefined) process.exit(1);
+  const state = process.env.OPENCLAW_STATE_DIR || path.join(os.homedir(), ".openclaw");
+  const filename = process.env.OPENCLAW_CONFIG_PATH || path.join(state, "openclaw.json");
+  const stored = JSON5.parse(fs.readFileSync(filename, "utf8"));
+  const actual = key.split(".").reduce((v, k) =>
+    v && typeof v === "object" ? v[k] : undefined, stored);
+  let desired = raw;
+  if (strict) desired = JSON5.parse(raw);
+  else if (raw === "true") desired = true;
+  else if (raw === "false") desired = false;
+  else if (/^-?\d+(?:\.\d+)?$/.test(raw)) desired = Number(raw);
+  const normalized = (v) => {
+    if (Array.isArray(v)) return v.map(normalized);
+    if (v && typeof v === "object") return Object.fromEntries(
+      Object.keys(v).sort().map(k => [k, normalized(v[k])]));
+    return v;
+  };
+  process.exit(JSON.stringify(normalized(actual)) ===
+    JSON.stringify(normalized(desired)) ? 0 : 1);
+} catch {
+  process.exit(1);
+}
+NEO_CONFIG_MATCH
+  then
+    return 0
+  fi
+  node openclaw.mjs config set "$@"
+}
+
+neo_config_set agents.defaults.workspace "$workspace"
+neo_config_set agents.defaults.heartbeat.every "0m"
+neo_config_set agents.defaults.model.primary "geminx-deepseek/deepseek-flash"
+neo_config_set agents.defaults.model.fallbacks "[]" --strict-json
 # Founder 2026-11-10: DeepSeek Flash owns all BUILD, tool-use and continuation
 # turns. geminx-google-qa is a separate EXPLICIT no-paid-fallback verification
 # lane; it refuses to run unless the backend independently confirms Google's
@@ -117,27 +158,27 @@ node openclaw.mjs config set agents.defaults.model.fallbacks "[]" --strict-json
 # No automatic model swap in the middle of a mutating job.
 # Pro remains a separately authorised reasoning escalation.
 # Explicit /think overrides remain higher priority.
-node openclaw.mjs config set agents.defaults.thinkingDefault "off"
-node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/geminx-auto\":{},\"geminx-deepseek/deepseek-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{},\"geminx-deepseek/geminx-google-qa\":{}}" --strict-json --replace
+neo_config_set agents.defaults.thinkingDefault "off"
+neo_config_set agents.defaults.models "{\"geminx-deepseek/geminx-auto\":{},\"geminx-deepseek/deepseek-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{},\"geminx-deepseek/geminx-google-qa\":{}}" --strict-json --replace
 # The Railway NEO runtime intentionally carries no OpenAI embedding credential.
 # Keep memory_search useful without noisy startup/auth failures by selecting
 # OpenClaw's deliberate lexical FTS-only mode instead of the default OpenAI provider.
-node openclaw.mjs config set agents.defaults.memorySearch.provider "none"
+neo_config_set agents.defaults.memorySearch.provider "none"
 # Digital Ambush final-image ownership stays inside the real NEO tool loop.
 # Reuse OpenClaw's native Google image_generate provider; no second image factory.
-node openclaw.mjs config set agents.defaults.imageGenerationModel.primary "google/gemini-3.1-flash-image"
-node openclaw.mjs config set agents.defaults.imageGenerationModel.fallbacks "[]" --strict-json
+neo_config_set agents.defaults.imageGenerationModel.primary "google/gemini-3.1-flash-image"
+neo_config_set agents.defaults.imageGenerationModel.fallbacks "[]" --strict-json
 # OpenClaw is a full NEO execution runtime with its own native tool loop.
 # GeminX provides authenticated free-first/budgeted model transport, while the canonical Brain
 # provides identity/continuity. Do not route the default OpenClaw agent through
 # the GeminX-native NEO completion path, because that bypasses OpenClaw exec/files/process/browser tools.
-node openclaw.mjs config set gateway.http.endpoints.chatCompletions.enabled true
+neo_config_set gateway.http.endpoints.chatCompletions.enabled true
 # Railway can retain an older literal gateway.auth.token on the persistent volume.
 # Make the runtime environment variable the canonical auth source on every boot
 # without persisting the secret value itself in openclaw.json.
-node openclaw.mjs config set gateway.auth.mode "token"
-node openclaw.mjs config set gateway.auth.token '{"source":"env","provider":"default","id":"OPENCLAW_GATEWAY_TOKEN"}' --strict-json --replace
-node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/geminx-auto\":{},\"geminx-deepseek/deepseek-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{},\"geminx-deepseek/geminx-google-qa\":{}}" --strict-json --replace
+neo_config_set gateway.auth.mode "token"
+neo_config_set gateway.auth.token '{"source":"env","provider":"default","id":"OPENCLAW_GATEWAY_TOKEN"}' --strict-json --replace
+neo_config_set agents.defaults.models "{\"geminx-deepseek/geminx-auto\":{},\"geminx-deepseek/deepseek-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{},\"geminx-deepseek/geminx-google-qa\":{}}" --strict-json --replace
 
 # NEO model profile: DeepSeek Flash/Pro offer a full 1M token context.
 # Advertise the true supported maximum to avoid premature truncation.
@@ -145,15 +186,15 @@ node openclaw.mjs config set agents.defaults.models "{\"geminx-deepseek/geminx-a
 # reserves output headroom and can refuse expensive over-budget calls.
 # Compact long active transcripts before transport/model limits are threatened,
 # retain a useful recent tail, and re-check pressure between tool turns.
-node openclaw.mjs config set agents.defaults.contextTokens "1000000" --strict-json
-node openclaw.mjs config set agents.defaults.compaction.reserveTokens "24000" --strict-json
-node openclaw.mjs config set agents.defaults.compaction.keepRecentTokens "8000" --strict-json
-node openclaw.mjs config set agents.defaults.compaction.maxActiveTranscriptBytes "\"192kb\"" --strict-json
-node openclaw.mjs config set agents.defaults.compaction.truncateAfterCompaction "true" --strict-json
-node openclaw.mjs config set agents.defaults.compaction.midTurnPrecheck.enabled "true" --strict-json
-node openclaw.mjs config set agents.defaults.compaction.notifyUser "false" --strict-json
+neo_config_set agents.defaults.contextTokens "1000000" --strict-json
+neo_config_set agents.defaults.compaction.reserveTokens "24000" --strict-json
+neo_config_set agents.defaults.compaction.keepRecentTokens "8000" --strict-json
+neo_config_set agents.defaults.compaction.maxActiveTranscriptBytes "\"192kb\"" --strict-json
+neo_config_set agents.defaults.compaction.truncateAfterCompaction "true" --strict-json
+neo_config_set agents.defaults.compaction.midTurnPrecheck.enabled "true" --strict-json
+neo_config_set agents.defaults.compaction.notifyUser "false" --strict-json
 # Memory flush is OpenClaw housekeeping, not Founder conversation. Keep it on the raw provider lane.
-node openclaw.mjs config set agents.defaults.compaction.memoryFlush.model "geminx-deepseek/deepseek-flash"
+neo_config_set agents.defaults.compaction.memoryFlush.model "geminx-deepseek/deepseek-flash"
 
 if [ -z "${OPENCLAW_MODEL_PROXY_BASE_URL:-}" ]; then
   echo "OPENCLAW_MODEL_PROXY_BASE_URL is required for the Railway DeepSeek provider bridge" >&2
@@ -249,15 +290,15 @@ NODE
 # The generic "deepseek" provider may have a persisted direct DeepSeek credential
 # in AuthStorage; AuthStorage outranks models.json apiKey resolution and would send
 # that provider key to the GeminX proxy instead of the shared proxy bearer.
-node openclaw.mjs config set models.providers.geminx-deepseek "$deepseek_provider_json" --strict-json --replace
+neo_config_set models.providers.geminx-deepseek "$deepseek_provider_json" --strict-json --replace
 
 if [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; then
-  node openclaw.mjs config set gateway.controlUi.allowedOrigins "[\"https://${RAILWAY_PUBLIC_DOMAIN}\"]" --strict-json --replace
+  neo_config_set gateway.controlUi.allowedOrigins "[\"https://${RAILWAY_PUBLIC_DOMAIN}\"]" --strict-json --replace
 fi
 
 # Keep OpenClaw's authenticated agent-first HTTP bridge for direct NEO execution and diagnostics.
 # GeminX may delegate bounded work here, but GeminX HQ does not depend on this gateway for its own availability.
-node openclaw.mjs config set gateway.http.endpoints.chatCompletions.enabled "true" --strict-json
+neo_config_set gateway.http.endpoints.chatCompletions.enabled "true" --strict-json
 
 # Enable OpenClaw's bundled authenticated admin HTTP RPC for trusted GeminX/Cloud AG
 # health checks and bounded gateway restart requests. This reuses the existing
