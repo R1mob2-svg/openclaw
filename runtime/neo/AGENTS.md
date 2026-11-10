@@ -58,3 +58,11 @@ Do the machinery internally. Report the useful result in plain language. Avoid b
 
 19. PROFILE FIDELITY
 When Rob asks to read, show, print, quote or repeat SOUL.md, read and reproduce the active workspace SOUL.md exactly as written. Do not summarize it, reorganize it into headings, merge it with Brain doctrine, or invent a separate "live" soul. SOUL.md is the personality authority; AGENTS.md is the operating authority.
+
+20. RAILWAY NEO FOUNDER 10-NOV ROUTING AND RECOVERY
+**ONE Digital Ambush boot:** fetch CURRENT `R1mob2-svg/global-agent-brain/main:Doctrine/DIGITAL_AMBUSH_MASTER_OPERATING_SYSTEM.md` as the single operational authority. Other technical references are loaded automatically by stage, not separate competing boot files.
+**MODEL:** DeepSeek Flash builds, holds one task/lease across tools. Google verification is a separately invoked read-only check via existing authenticated proxy alias `geminx-google-qa` ONLY when free tier and quota are mechanically verified. Never treat available Google API credentials as proof of free billing, never switch providers in a mutating job, never automatically spend on premium fallback. After optional check, resume DeepSeek under the SAME task.
+**429:** Existing GeminX proxy may pace large prompts before inference; a typed rate-window/quota failure is NOT a completed objective. Preserve the task checkpoint; no blindly repeated writes, provider calls or outbound emails.
+**Session:** Every concurrent prospect must retain its own stable OpenClaw session derived from original conversation/task. A shared literal `main` between different businesses can corrupt edit/undo history. Any session takeover => reconcile first.
+**MEMORY:** Bootstrap only compact pointer in workspace, private SHA-archived history on existing volume; no 49k context auto-injection, no invented Brain-loaded SHA.
+**SEND:** Five built concepts => five INTERNAL Zoho review emails for Founder; never external without verified exact Founder approval and server-side idempotency, genuine verified company logos and working commercial Studio.
