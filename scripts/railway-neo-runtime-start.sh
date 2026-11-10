@@ -230,6 +230,15 @@ node - <<'NODE'
     console.warn("[model-core] backend_status_degraded=429 gateway_start_allowed=true inference_unverified=true");
     return;
   }
+  // A Railway 502/503/504 during a sibling backend rollout is a temporary
+  // dependency outage, not a reason to kill and restart the entire Neo Gateway.
+  // No model request is authorized here: the proxy still authenticates and
+  // budget-checks every eventual inference call independently.
+  if ([502, 503, 504].includes(response.status)) {
+    console.warn("[model-core] backend_status_degraded=" + response.status +
+      " gateway_start_allowed=true inference_unverified=true");
+    return;
+  }
   if (!response.ok) throw new Error("MODEL_CORE_BACKEND_STATUS_" + response.status);
   const report = await response.json();
   if (report.schema_version !== "geminx.one-model-core.status.v1" || report.provider_route !== "geminx-auto") {
