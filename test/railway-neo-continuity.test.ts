@@ -58,10 +58,10 @@ describe("Railway NEO continuity bootstrap", () => {
 
   it("mechanically checks no-inference startup probe: 429/timeout start safely, 401/bad alias refuse", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
-    const snippet = /node - <<'NODE'\\n([\\s\\S]*?)\\nNODE/.exec(script)?.[1];
+    const snippet = /node - <<'NODE'\n([\s\\S]*?)\nNODE/.exec(script)?.[1];
     expect(snippet).toBeTruthy();
     const run = (mockFetch: string) => spawnSync(process.execPath, ["-"], {
-      input: `globalThis.fetch = ${mockFetch};\\n${snippet}\\n`,
+      input: `globalThis.fetch = ${mockFetch};\n${snippet}\n`,
       encoding: "utf8",
       env: {
         ...process.env,
