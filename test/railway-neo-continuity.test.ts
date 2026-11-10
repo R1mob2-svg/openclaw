@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";
+import { spawnSync } from "node:child_process";
 
 describe("Railway NEO continuity bootstrap", () => {
   it("uses the native OpenClaw pre-model Brain hook", () => {
@@ -53,6 +54,40 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).toContain('if (!response.ok) throw new Error("MODEL_CORE_BACKEND_STATUS_" + response.status);');
     expect(script).toContain('schema_version !== "geminx.one-model-core.status.v1"');
     expect(script).toContain("OPENCLAW_GATEWAY_TOKEN");
+  });
+
+  it("mechanically checks no-inference startup probe: 429/timeout start safely, 401/bad alias refuse", () => {
+    const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
+    const snippet = /node - <<'NODE'\\n([\\s\\S]*?)\\nNODE/.exec(script)?.[1];
+    expect(snippet).toBeTruthy();
+    const run = (mockFetch: string) => spawnSync(process.execPath, ["-"], {
+      input: `globalThis.fetch = ${mockFetch};\\n${snippet}\\n`,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        OPENCLAW_MODEL_PROXY_BASE_URL: "https://model-proxy.test/v1",
+        OPENCLAW_GATEWAY_TOKEN: "test-only-secret-not-a-real-key"
+      }
+    });
+    const throttle = run("async () => ({ status: 429, ok: false })");
+    expect(throttle.status).toBe(0);
+    expect(throttle.stderr).toContain("backend_status_degraded=429");
+
+    const timeout = run('async () => { throw new Error("The operation was aborted due to timeout"); }');
+    expect(timeout.status).toBe(0);
+    expect(timeout.stderr).toContain("backend_status_transport_degraded=true");
+
+    const unauthorized = run("async () => ({ status: 401, ok: false })");
+    expect(unauthorized.status).toBe(1);
+    expect(unauthorized.stderr).toContain("MODEL_CORE_BACKEND_STATUS_401");
+
+    const badAlias = run('async () => ({ status: 200, ok: true, json: async () => ({ schema_version: "wrong", provider_route: "not-neo" }) })');
+    expect(badAlias.status).toBe(1);
+    expect(badAlias.stderr).toContain("MODEL_CORE_BACKEND_ALIAS_UNVERIFIED");
+
+    const good = run('async () => ({ status: 200, ok: true, json: async () => ({ schema_version: "geminx.one-model-core.status.v1", provider_route: "geminx-auto", google_free_admission: "unverified_free_billing", deepseek_fallback_configured: true }) })');
+    expect(good.status).toBe(0);
+    expect(good.stdout).toContain("backend_status_verified=true");
   });
 
   it("pins Railway Gateway auth to the runtime token instead of a stale persisted literal", () => {
