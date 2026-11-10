@@ -168,10 +168,19 @@ node - <<'NODE'
   const token = process.env.OPENCLAW_GATEWAY_TOKEN?.trim();
   if (!base || !token) throw new Error("MODEL_CORE_PROXY_CREDENTIALS_MISSING");
   const statusUrl = base.replace(/\/v1$/, "") + "/status";
-  const response = await fetch(statusUrl, {
-    headers: { authorization: "Bearer " + token },
-    signal: AbortSignal.timeout(12000)
-  });
+  let response;
+  try {
+    response = await fetch(statusUrl, {
+      headers: { authorization: "Bearer " + token },
+      signal: AbortSignal.timeout(12000)
+    });
+  } catch (error) {
+    // When the backend is deploying or its edge times out, starting OpenClaw
+    // still must be possible. Every real model call is separately authenticated
+    // by the existing proxy; this never authorizes an inference bypass.
+    console.warn("[model-core] backend_status_transport_degraded=true gateway_start_allowed=true inference_unverified=true");
+    return;
+  }
   // The backend may return HTTP 429 from its edge/rate controls even when
   // authenticated. Do not restart the entire gateway forever on a transient
   // status probe. No LLM inference is used here, and all actual model calls
