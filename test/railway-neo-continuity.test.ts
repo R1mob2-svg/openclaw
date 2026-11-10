@@ -43,6 +43,16 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).toContain('agents.defaults.compaction.memoryFlush.model "geminx-deepseek/deepseek-flash"');
   });
 
+  it("survives a transient no-inference model-proxy 429 without bypassing auth or model spend guards", () => {
+    const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
+    expect(script).toContain("response.status === 429");
+    expect(script).toContain("backend_status_degraded=429");
+    expect(script).toContain("inference_unverified=true");
+    expect(script).toContain('if (!response.ok) throw new Error("MODEL_CORE_BACKEND_STATUS_" + response.status);');
+    expect(script).toContain('schema_version !== "geminx.one-model-core.status.v1"');
+    expect(script).toContain("OPENCLAW_GATEWAY_TOKEN");
+  });
+
   it("pins Railway Gateway auth to the runtime token instead of a stale persisted literal", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
