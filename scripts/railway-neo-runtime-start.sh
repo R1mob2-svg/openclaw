@@ -172,6 +172,14 @@ node - <<'NODE'
     headers: { authorization: "Bearer " + token },
     signal: AbortSignal.timeout(12000)
   });
+  // The backend may return HTTP 429 from its edge/rate controls even when
+  // authenticated. Do not restart the entire gateway forever on a transient
+  // status probe. No LLM inference is used here, and all actual model calls
+  // remain authenticated and independently subject to backend spending gates.
+  if (response.status === 429) {
+    console.warn("[model-core] backend_status_degraded=429 gateway_start_allowed=true inference_unverified=true");
+    return;
+  }
   if (!response.ok) throw new Error("MODEL_CORE_BACKEND_STATUS_" + response.status);
   const report = await response.json();
   if (report.schema_version !== "geminx.one-model-core.status.v1" || report.provider_route !== "geminx-auto") {
