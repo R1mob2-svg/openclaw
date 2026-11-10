@@ -1,34 +1,28 @@
 ---
 name: digital-ambush
-description: End-to-end prospect research, personalized demo-page creation, original image generation, HTML outreach composition, safe test delivery, and receipt verification for Entreprenuity Digital Ambush.
+description: Build and verify Entreprenuity prospect concepts through existing DeepSeek Neo with optional verified-free Google QA.
 user-invocable: true
-metadata:
-  {"openclaw":{"requires":{"env":["OPENAI_API_KEY"]}}}
 ---
 
-# Digital Ambush
+# Digital Ambush — ONE Global Brain boot
 
-Own the objective end to end. Diagnosis or a draft is not completion.
+**SINGLE mandatory boot path:** `R1mob2-svg/global-agent-brain/main:Doctrine/DIGITAL_AMBUSH_MASTER_OPERATING_SYSTEM.md`. Fetch exact current GitHub SHA, read its TOP SINGLE BOOT section and resume original task and lease. THIS skill is subordinate implementation guidance only.
 
-## Safety boundary
-- Never contact a real prospect during an acceptance test. Deliver only to the monitoring recipient explicitly supplied by the Founder.
-- Do not invent research, URLs, deployments, images, sends, or receipts.
-- Respect robots/access controls, authentication, provider policy, and protected-action rules.
-- Do not expose secrets in prompts, HTML, logs, URLs, commits, or receipts.
+## Founder model routing
+- **DeepSeek Flash builds:** `geminx-deepseek/deepseek-flash` is the normal provider for investigation, HTML/CSS, Git/file mutation and all tool continuations. Never switch model in the middle of a mutating operation. DeepSeek V4 Pro only upon explicit bounded reasoning escalation.
+- **Deterministic QA first:** Use existing browser/Playwright/HTML validation, SHA readback and responsive screenshots. These are not model inference and cost no extra LLM calls.
+- **Optional truly free Google QA:** Read-only second opinion only AFTER deterministic QA, via `node /app/scripts/neo-google-free-qa.mjs <evidence-file>`. This exclusively uses existing GeminX proxy `geminx-google-qa`; it refuses any work unless the correct Google API project is independently verified to be free-tier and has remaining quota. If blocked, report `GOOGLE_FREE_QA_NOT_VERIFIED_OR_EXHAUSTED`; DO NOT bill DeepSeek/Google paid plan under the word free. This is NOT a Google image-generation free entitlement.
+- Return to SAME DeepSeek Flash job/lease after optional QA; evidence must carry source URLs/SHA and Google returns observations only, no tools, no prospect email, no mutations.
 
-## Operating loop
-1. **Discover.** Use current public web/browser evidence to find a commercially plausible prospect matching the requested geography/niche. Prefer a business with a real service, current trading evidence, and an identifiable website/marketing opportunity.
-2. **Research.** Inspect the official website plus corroborating public sources where useful. Record only evidenced facts. Identify concrete conversion/UX/SEO/offer weaknesses and a specific opportunity. Do not manufacture personal details.
-3. **Qualify.** Reject weak prospects. Explain the commercial reason for the selected prospect and the evidence.
-4. **Build.** Create a prospect-specific Digital Ambush demo/landing page using the existing Entreprenuity web/deploy tooling. The page must be materially personalized, responsive, and contain no false claims. Deploy it to a real reachable URL.
-5. **Visual.** Use OpenClaw's native `image_generate` tool with the configured image model/provider to create an original relevant visual when the objective requests imagery. Store/reference the generated artifact. Never substitute a scraped copyrighted image merely to satisfy the step.
-6. **Email.** Compose polished responsive HTML outreach. It must be concise, specific to evidenced research, visually coherent, include the generated visual where technically supported, and link to the live personalized demo. Avoid deceptive urgency, fake testimonials, tracking tricks, or fabricated metrics.
-7. **Deliver.** In test mode send only to the monitoring address in the objective, through an already-authorized mail tool/account. Never silently fall back to the prospect address.
-8. **Verify.** Independently re-fetch the demo URL, verify the image artifact exists, verify the outbound send receipt/message id and recipient, and where mailbox tools permit verify receipt/rendering.
-9. **Receipt.** Return a terminal receipt with prospect, sources, qualification, exact live URL, image artifact/receipt, email subject, recipient, send receipt/message id, and PASS/FAIL for every stage.
+## End-to-end Digital Ambush
+1. Recover existing job ID, durable lease, commits and provider receipts before any operation; backend restart STOP is NOT completion and cannot trigger a duplicate write.
+2. Qualify real independent business identity, email, published telephone, genuine company logo/provenance, accurate services and zero-website status with independent sources. Respect DNC, UK outreach rules and prior CRM/sends. No fabricated logo.
+3. Brian is the site builder unless Founder explicitly assigned NEO to build. Use existing V6 homepage, V6.5 Studio and published manifest under the ONE Global Brain ledger, auto-fetch technical references only as needed.
+4. Stage on the existing safe GitHub branch and real publisher, with signed stable secure ID, brand-domain Studio and fullscreen revision parity. Prove live deployed commit/browser content and responsive screenshots. No seven blind mirrors, generic SPA 200 or fabricated 38-point QA count.
+5. Generate true-logo HTML + text outreach with live preview. FIRST send only to existing verified Founder INTERNAL mailbox via Entreprenuity AI Zoho EU. Customer remains proposed recipient metadata only, no To/CC/BCC. STOP for Founder exact approval.
+6. After explicit Founder approval of exact recipient/content/revision and legal/suppression checks, only the existing authorised idempotent external sender may contact the prospect, with actual provider receipts.
+7. Persist checkpoint in existing CRM, Google Sheet and Global Brain. All global defects promoted to SAME master ledger.
 
-## Recovery law
-Use the cheapest capable tool first. If a tool fails, diagnose the failure and use an authorized fallback when available. Do not repeat an unchanged failed action. Keep the same objective and receipts across retries.
-
-## Completion gate
-PASS requires all requested stages to have current receipts. A beautiful draft without a live URL or verified test send is FAIL/PARTIAL.
+## Failure and safety
+On 429 model/quota/image exhaustion, provider errors, tool-output blindness, or session takeover, STOP current stage with typed durable checkpoint; inspect previous mutation before retrying. Respect Retry-After and existing proxy pacing; no blind provider replay. Do not assume Google image generation is free or switch to exhausted OpenAI image API. Use already licensed photos or HOLD rather than spending unapproved money. No new CRMs, gateways, schedulers, agents or unsafe external sends.
+Report only evidence-backed statuses [IMPLEMENTED], [TESTED], [DEPLOYED], [LIVE], [MECHANICALLY PROVEN].
