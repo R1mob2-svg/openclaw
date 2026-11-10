@@ -77,6 +77,13 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(timeout.status).toBe(0);
     expect(timeout.stderr).toContain("backend_status_transport_degraded=true");
 
+    for (const temporary of [502, 503, 504]) {
+      const degraded = run("async () => ({ status: " + temporary + ", ok: false })");
+      expect(degraded.status).toBe(0);
+      expect(degraded.stderr).toContain("backend_status_degraded=" + temporary);
+      expect(degraded.stderr).toContain("inference_unverified=true");
+    }
+
     const unauthorized = run("async () => ({ status: 401, ok: false })");
     expect(unauthorized.status).toBe(1);
     expect(unauthorized.stderr).toContain("MODEL_CORE_BACKEND_STATUS_401");
