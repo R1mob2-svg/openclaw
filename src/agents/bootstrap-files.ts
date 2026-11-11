@@ -293,7 +293,7 @@ async function isWorkspaceSetupCompletedForContext(workspaceDir: string): Promis
 export const DEFAULT_NEO_REMOTE_BRAIN_TIMEOUT_MS = 25_000;
 
 export function resolveNeoRemoteBrainTimeoutMs(raw: string | undefined): number {
-  if (!raw || !/^\\d+$/.test(raw.trim())) return DEFAULT_NEO_REMOTE_BRAIN_TIMEOUT_MS;
+  if (!raw || !/^\d+$/.test(raw.trim())) return DEFAULT_NEO_REMOTE_BRAIN_TIMEOUT_MS;
   const value = Number(raw.trim());
   return Number.isSafeInteger(value) && value >= 15_000 && value <= 60_000
     ? value
