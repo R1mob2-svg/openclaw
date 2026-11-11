@@ -287,7 +287,18 @@ async function isWorkspaceSetupCompletedForContext(workspaceDir: string): Promis
 }
 
 /** Resolves hook-adjusted, session-filtered bootstrap files for a run. */
-const NEO_REMOTE_BRAIN_TIMEOUT_MS = 10_000;
+// The canonical Brain query regularly takes ~14 seconds in production.
+// A 10s client timeout silently discarded valid responses and injected stale-memory warnings.
+// Keep this lower than the user-facing chat timeout, but long enough for ordinary Brain retrieval.
+export const DEFAULT_NEO_REMOTE_BRAIN_TIMEOUT_MS = 25_000;
+
+export function resolveNeoRemoteBrainTimeoutMs(raw: string | undefined): number {
+  if (!raw || !/^\\d+$/.test(raw.trim())) return DEFAULT_NEO_REMOTE_BRAIN_TIMEOUT_MS;
+  const value = Number(raw.trim());
+  return Number.isSafeInteger(value) && value >= 15_000 && value <= 60_000
+    ? value
+    : DEFAULT_NEO_REMOTE_BRAIN_TIMEOUT_MS;
+}
 
 function neoRemoteBrainFailureFile(
   workspaceDir: string,
@@ -349,7 +360,10 @@ async function loadNeoRemoteBrainBootstrapFile(params: {
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), NEO_REMOTE_BRAIN_TIMEOUT_MS);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    resolveNeoRemoteBrainTimeoutMs(process.env.OPENCLAW_NEO_BRAIN_BOOTSTRAP_TIMEOUT_MS),
+  );
   try {
     const response = await fetch(url, {
       method: "GET",
