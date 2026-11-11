@@ -54,11 +54,11 @@ RUN apt-get update \
 # Fail the image build before deploying a runtime that cannot load Chromium.
 # Browsers themselves live on the mounted OpenClaw volume and are probed there
 # after deployment; this verifies the image's loader and shell prerequisites.
-RUN /bin/bash -c 'set -euo pipefail; for so in \
+RUN /bin/bash -c 'set -euo pipefail; available="$(ldconfig -p)"; for so in \
     libnspr4.so libnss3.so libnssutil3.so libsmime3.so \
     libatk-1.0.so.0 libatk-bridge-2.0.so.0 libatspi.so.0 \
     libgbm.so.1 libasound.so.2; do \
-    ldconfig -p | grep -Fq "$so" || { echo "missing Chromium library: $so" >&2; exit 1; }; \
+    grep -Fq "$so" <<< "$available" || { echo "missing Chromium library: $so" >&2; exit 1; }; \
     done'
 
 COPY . .
