@@ -1,7 +1,7 @@
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeTempWorkspace } from "../test-helpers/workspace.js";
-import { resolveBootstrapFilesForRun } from "./bootstrap-files.js";
+import { resolveBootstrapFilesForRun, resolveNeoRemoteBrainTimeoutMs } from "./bootstrap-files.js";
 
 describe("NEO remote Brain bootstrap", () => {
   const originalUrl = process.env.OPENCLAW_NEO_BRAIN_URL;
@@ -22,6 +22,15 @@ describe("NEO remote Brain bootstrap", () => {
     else process.env.OPENCLAW_NEO_BRAIN_TOKEN = originalToken;
     if (originalRequired === undefined) delete process.env.OPENCLAW_NEO_BRAIN_REQUIRED;
     else process.env.OPENCLAW_NEO_BRAIN_REQUIRED = originalRequired;
+  });
+
+  it("allocates enough time for a normal 14-second canonical Brain fetch", () => {
+    // Production Brain reads have exceeded the previous 10s timeout; invalid overrides fail safe.
+    expect(resolveNeoRemoteBrainTimeoutMs(undefined)).toBe(25_000);
+    expect(resolveNeoRemoteBrainTimeoutMs("14000")).toBe(25_000);
+    expect(resolveNeoRemoteBrainTimeoutMs("45000")).toBe(45_000);
+    expect(resolveNeoRemoteBrainTimeoutMs("999999")).toBe(25_000);
+    expect(resolveNeoRemoteBrainTimeoutMs("invalid")).toBe(25_000);
   });
 
   it("fetches the canonical Brain before default-session model context is built", async () => {
