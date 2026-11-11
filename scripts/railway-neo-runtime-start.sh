@@ -148,7 +148,9 @@ NEO_CONFIG_MATCH
 }
 
 neo_config_set agents.defaults.workspace "$workspace"
-neo_config_set agents.defaults.heartbeat.every "0m"
+# Founder-approved hourly self-check. Persist through deployments in the canonical startup script.
+# No separate scheduler or external send channel; existing gateway and budgets still apply.
+neo_config_set agents.defaults.heartbeat.every "1h"
 neo_config_set agents.defaults.model.primary "geminx-deepseek/deepseek-flash"
 neo_config_set agents.defaults.model.fallbacks "[]" --strict-json
 # Founder 2026-11-10: DeepSeek Flash owns all BUILD, tool-use and continuation
