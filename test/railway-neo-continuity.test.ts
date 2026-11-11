@@ -187,6 +187,8 @@ describe("Railway NEO continuity bootstrap", () => {
 
   it("skips already persisted NEO configuration without running the heavy CLI", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
+    expect(script).toContain('neo_config_set agents.defaults.heartbeat.every "1h"');
+    expect(script).not.toContain('neo_config_set agents.defaults.heartbeat.every "0m"');
     expect(script).toContain("neo_config_set() {");
     expect(script).toContain('node openclaw.mjs config set "$@"');
     const source = /if node --input-type=module - "\$@" <<'NEO_CONFIG_MATCH'\n([\s\S]*?)\nNEO_CONFIG_MATCH/.exec(script)?.[1];
