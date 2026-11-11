@@ -316,6 +316,79 @@ node openclaw.mjs plugins enable admin-http-rpc
 
 node openclaw.mjs config validate
 
+# Railway runtime parity proof. The build verifies system libraries, but
+# Chromium binaries live on the persistent volume and may be older or missing.
+# This is a bounded, read-only probe: no model calls, no remote browser session,
+# no operator tokens, and no restart loop if the optional local browser fails.
+node - <<'NEO_RAILWAY_PARITY'
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
+const result = {
+  schema: "neo.railway.runtime-parity.v1",
+  uid: typeof process.getuid === "function" ? process.getuid() : null,
+  bash: "FAIL",
+  browser_cache: "NOT_FOUND",
+  binary: null,
+  loader: "NOT_TESTED",
+  headless: "NOT_TESTED",
+  failure: null
+};
+try {
+  const shell = spawnSync("/bin/bash", ["-lc", "printf BASH_OK"], {
+    timeout: 2000, encoding: "utf8"
+  });
+  result.bash = shell.status === 0 && shell.stdout === "BASH_OK" ? "PASS" : "FAIL";
+
+  const cache = process.env.PLAYWRIGHT_BROWSERS_PATH ||
+    path.join(process.env.OPENCLAW_STATE_DIR || "/home/node/.openclaw", "ms-playwright");
+  const directories = fs.existsSync(cache) ? fs.readdirSync(cache).sort().reverse() : [];
+  const candidates = [];
+  for (const name of directories) {
+    if (!/^chromium_headless_shell-\d+$|^chromium-\d+$/.test(name)) continue;
+    const folder = path.join(cache, name);
+    const choices = name.startsWith("chromium_headless_shell-")
+      ? ["chrome-linux/headless_shell", "chrome-linux64/headless_shell",
+          "chrome-headless-shell-linux64/chrome-headless-shell", "headless_shell"]
+      : ["chrome-linux/chrome", "chrome-linux64/chrome"];
+    for (const rel of choices) {
+      const p = path.join(folder, rel);
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) candidates.push(p);
+    }
+  }
+  if (candidates.length) {
+    const browser = candidates[0];
+    result.browser_cache = "FOUND";
+    result.binary = path.basename(path.dirname(browser)) + "/" + path.basename(browser);
+    const linked = spawnSync("ldd", [browser], { timeout: 3000, encoding: "utf8", maxBuffer: 1024 * 128 });
+    const missing = (linked.stdout || "").match(/^\s*\S+\s+=>\s+not found\s*$/gm) || [];
+    result.loader = linked.status === 0 && missing.length === 0 ? "PASS" : "FAIL";
+    if (result.loader === "PASS") {
+      const profile = fs.mkdtempSync(path.join(os.tmpdir(), "neo-parity-"));
+      try {
+        const smoke = spawnSync(browser, [
+          "--headless", "--no-sandbox", "--disable-gpu",
+          "--disable-dev-shm-usage", "--no-first-run",
+          "--no-default-browser-check", "--user-data-dir=" + profile,
+          "--dump-dom", "about:blank"
+        ], { timeout: 12000, encoding: "utf8", maxBuffer: 1024 * 128 });
+        result.headless = smoke.status === 0 && /<html[\s>]/i.test(smoke.stdout || "")
+          ? "PASS" : "FAIL";
+        if (result.headless !== "PASS") result.failure =
+          smoke.error?.code === "ETIMEDOUT" ? "HEADLESS_TIMEOUT" : "HEADLESS_RENDER_FAILED";
+      } finally {
+        fs.rmSync(profile, { recursive: true, force: true });
+      }
+    } else result.failure = "CHROMIUM_SHARED_LIBRARY_UNRESOLVED";
+  } else result.failure = "MOUNTED_PLAYWRIGHT_BROWSER_NOT_FOUND";
+  if (result.bash !== "PASS") result.failure = "BASH_UNAVAILABLE";
+} catch (error) {
+  result.failure = "PARITY_PROBE_" + (error?.code || "UNEXPECTED");
+}
+console.log("[neo-runtime-parity] " + JSON.stringify(result));
+NEO_RAILWAY_PARITY
+
 # GitHub issue bus is a durable coordination ingress for NEO. Run it as a
 # sidecar in the same container so AGENT_MESSAGE_BUS envelopes are actually
 # materialized into the persistent OpenClaw runtime instead of sitting unread.
