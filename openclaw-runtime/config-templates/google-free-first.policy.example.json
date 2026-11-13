@@ -1,0 +1,42 @@
+{
+  "$comment": "Reference overlay only; merge into existing OpenClaw config, do not replace it. Activate only after free-tier and privacy confirmation.",
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "google": {
+        "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
+        "models": [
+          {
+            "id": "gemini-3.7-flash",
+            "name": "Gemini 3.7 Flash",
+            "reasoning": true,
+            "input": [
+              "text",
+              "image"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "google/gemini-3.7-flash",
+        "fallbacks": [
+          "deepseek/deepseek-chat"
+        ]
+      }
+    }
+  },
+  "plugins": {
+    "entries": {
+      "google-free-first": {
+        "enabled": true,
+        "hooks": {
+          "allowConversationAccess": true
+        }
+      }
+    }
+  }
+}
