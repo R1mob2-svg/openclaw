@@ -18,30 +18,41 @@ export interface NeoRemoteBrainCache {
   context: string;
   sha256: string;
 }
+/** Existing OpenClaw state volume, not application-image /app. */
+export function neoRemoteBrainDirectory(workspaceDir: string): string {
+  const stateDir = process.env.OPENCLAW_STATE_DIR?.trim() || path.dirname(workspaceDir);
+  return path.join(stateDir, ".neo-remote-brain");
+}
 const cachedPath = (workspaceDir: string) =>
+  path.join(neoRemoteBrainDirectory(workspaceDir), "verified-snapshot.json");
+const legacyCachedPath = (workspaceDir: string) =>
   path.join(workspaceDir, ".neo-remote-brain", "verified-snapshot.json");
 
 export async function readNeoRemoteBrainCache(
   workspaceDir: string,
   now = Date.now(),
 ): Promise<{ record: NeoRemoteBrainCache; ageMs: number } | null> {
-  try {
-    const candidate: unknown = JSON.parse(await fs.readFile(cachedPath(workspaceDir), "utf8"));
-    if (!candidate || typeof candidate !== "object") return null;
-    const record = candidate as NeoRemoteBrainCache;
-    const ageMs = now - record.saved_at_ms;
-    if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > NEO_REMOTE_CACHE_MAX_AGE_MS ||
-        !/^[a-f0-9]{40}$/i.test(record.revision) ||
-        typeof record.context !== "string" || !record.context.trim() ||
-        record.context.length > MAX_CONTEXT_CHARS ||
-        typeof record.sha256 !== "string" ||
-        createHash("sha256").update(record.context, "utf8").digest("hex") !== record.sha256) {
-      return null;
+  for (const filename of [cachedPath(workspaceDir), legacyCachedPath(workspaceDir)]) {
+    try {
+      const candidate: unknown = JSON.parse(await fs.readFile(filename, "utf8"));
+      if (!candidate || typeof candidate !== "object") continue;
+      const record = candidate as NeoRemoteBrainCache;
+      const ageMs = now - record.saved_at_ms;
+      if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > NEO_REMOTE_CACHE_MAX_AGE_MS ||
+          !/^[a-f0-9]{40}$/i.test(record.revision) ||
+          typeof record.context !== "string" || !record.context.trim() ||
+          record.context.length > MAX_CONTEXT_CHARS ||
+          typeof record.sha256 !== "string" ||
+          createHash("sha256").update(record.context, "utf8").digest("hex") !== record.sha256) {
+        continue;
+      }
+      return { record, ageMs };
+    } catch {
+      // Missing or invalid canonical snapshot: inspect the original workspace
+      // location once for compatibility with the previous verified cache.
     }
-    return { record, ageMs };
-  } catch {
-    return null;
   }
+  return null;
 }
 
 export async function saveNeoRemoteBrainCache(
