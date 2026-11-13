@@ -153,8 +153,11 @@ export function mergeAgentList(existingList = [], root = process.env.OPENCLAW_ST
   for (const agent of ordered) {
     delete agent.default;
   }
-  const defaultAgent = ordered.find((agent) => agent.id === DEFAULT_AGENT_ID);
-  if (defaultAgent) {
+  let defaultAgent = ordered.find((agent) => agent.id === DEFAULT_AGENT_ID);
+  if (!defaultAgent) {
+    defaultAgent = { id: DEFAULT_AGENT_ID, default: true, workspace: path.join(root, "workspace") };
+    ordered.push(defaultAgent);
+  } else {
     defaultAgent.default = true;
   }
   return ordered;
