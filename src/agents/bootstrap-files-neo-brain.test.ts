@@ -2,11 +2,13 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeTempWorkspace } from "../test-helpers/workspace.js";
 import { resolveBootstrapFilesForRun, resolveNeoRemoteBrainTimeoutMs } from "./bootstrap-files.js";
+import { neoRemoteBrainDirectory } from "./neo-remote-brain-cache.js";
 
 describe("NEO remote Brain bootstrap", () => {
   const originalUrl = process.env.OPENCLAW_NEO_BRAIN_URL;
   const originalToken = process.env.OPENCLAW_NEO_BRAIN_TOKEN;
   const originalRequired = process.env.OPENCLAW_NEO_BRAIN_REQUIRED;
+  const originalStateDir = process.env.OPENCLAW_STATE_DIR;
 
   beforeEach(() => {
     process.env.OPENCLAW_NEO_BRAIN_URL = "https://geminx.example.test/api/v1/neo/brain-bootstrap";
@@ -22,6 +24,8 @@ describe("NEO remote Brain bootstrap", () => {
     else process.env.OPENCLAW_NEO_BRAIN_TOKEN = originalToken;
     if (originalRequired === undefined) delete process.env.OPENCLAW_NEO_BRAIN_REQUIRED;
     else process.env.OPENCLAW_NEO_BRAIN_REQUIRED = originalRequired;
+    if (originalStateDir === undefined) delete process.env.OPENCLAW_STATE_DIR;
+    else process.env.OPENCLAW_STATE_DIR = originalStateDir;
   });
 
   it("allocates enough time for a normal 14-second canonical Brain fetch", () => {
@@ -44,8 +48,22 @@ describe("NEO remote Brain bootstrap", () => {
             status: "attached",
             continuity: "ORIGINAL_NEO_CANONICAL_GITHUB_BRAIN",
             generated_at: "2026-09-25T10:00:00.000Z",
-            sources: [{ path: "Agents/NEO/ACTIVE_STATE.md" }],
-            context: "NEO ACTIVE: canonical fresh Brain state"
+            brain_revision: "a".repeat(40),
+            sources: [
+              { path: "Agents/NEO/OPERATING_RULES.md" },
+              { path: "Agents/NEO/ACTIVE_STATE.md" },
+            ],
+            context: [
+              "SOURCE FILE: Agents/NEO/OPERATING_RULES.md",
+              "Source: verified fixture",
+              "NEO RULES: fail closed when evidence is missing",
+              "",
+              "---",
+              "",
+              "SOURCE FILE: Agents/NEO/ACTIVE_STATE.md",
+              "Source: verified fixture",
+              "NEO ACTIVE: canonical fresh Brain state",
+            ].join("\n")
           }
         }),
         { status: 200, headers: { "content-type": "application/json" } }
@@ -54,15 +72,17 @@ describe("NEO remote Brain bootstrap", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const workspaceDir = await makeTempWorkspace("openclaw-neo-brain-");
+    process.env.OPENCLAW_STATE_DIR = workspaceDir;
     const files = await resolveBootstrapFilesForRun({ workspaceDir, runKind: "default" });
     const remote = files.find((file) =>
-      file.path === path.join(workspaceDir, ".neo-remote-brain", "MEMORY.md")
+      file.path === path.join(neoRemoteBrainDirectory(workspaceDir), "MEMORY.md")
     );
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(remote?.name).toBe("MEMORY.md");
     expect(remote?.content).toContain("REMOTE_BRAIN_STATUS=ATTACHED");
-    expect(remote?.content).toContain("ORIGINAL_NEO_CANONICAL_GITHUB_BRAIN");
+    expect(remote?.content).toContain("NEO RULES: fail closed");
+    expect(remote?.content).toContain("BRAIN_REVISION=" + "a".repeat(40));
     expect(remote?.content).toContain("NEO ACTIVE: canonical fresh Brain state");
   });
 
@@ -70,9 +90,10 @@ describe("NEO remote Brain bootstrap", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 503 })));
 
     const workspaceDir = await makeTempWorkspace("openclaw-neo-brain-fail-");
+    process.env.OPENCLAW_STATE_DIR = workspaceDir;
     const files = await resolveBootstrapFilesForRun({ workspaceDir, runKind: "default" });
     const remote = files.find((file) =>
-      file.path === path.join(workspaceDir, ".neo-remote-brain", "MEMORY.md")
+      file.path === path.join(neoRemoteBrainDirectory(workspaceDir), "MEMORY.md")
     );
 
     expect(remote?.content).toContain("REMOTE_BRAIN_STATUS=UNAVAILABLE");
@@ -84,6 +105,7 @@ describe("NEO remote Brain bootstrap", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const workspaceDir = await makeTempWorkspace("openclaw-neo-brain-heartbeat-");
+    process.env.OPENCLAW_STATE_DIR = workspaceDir;
     await resolveBootstrapFilesForRun({ workspaceDir, runKind: "heartbeat", contextMode: "lightweight" });
 
     expect(fetchMock).not.toHaveBeenCalled();

@@ -14,7 +14,7 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(bootstrap).toContain("OPENCLAW_NEO_BRAIN_TOKEN");
     expect(bootstrap).toContain("OPENCLAW_NEO_BRAIN_REQUIRED");
     expect(bootstrap).toContain("loadNeoRemoteBrainBootstrapFile");
-    expect(bootstrap).toContain("immediately before OpenClaw built model context");
+    expect(bootstrap).toContain("immediately before model bootstrap");
   });
 
   it("registers Railway models through the GeminX provider without copying the DeepSeek secret", () => {
@@ -30,11 +30,13 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).not.toContain("DEEPSEEK_API_KEY");
   });
 
-  it("routes free-first GeminX with bounded DeepSeek fallback and no persisted direct DeepSeek credentials", () => {
+  it("routes GeminX Flash with configured same-provider fallbacks and no direct DeepSeek credentials", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
     expect(script).toContain('agents.defaults.model.primary "geminx-deepseek/deepseek-flash"');
-    expect(script).toContain('agents.defaults.model.fallbacks "[]" --strict-json');
+    expect(script).toContain('agents.defaults.model.fallbacks');
+    expect(script).toContain('"geminx-deepseek/deepseek-v4-pro"');
+    expect(script).toContain('"geminx-deepseek/geminx-auto"');
     expect(script).toContain('agents.defaults.thinkingDefault "off"');
     expect(script).toContain("models.providers.geminx-deepseek");
     expect(script).toContain("geminx-google-qa");
