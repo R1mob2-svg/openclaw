@@ -342,7 +342,7 @@ async function neoRemoteBrainCachedOrFailureFile(
         "This cached context is not a fresh GitHub read. Current runtime receipts take precedence.",
         "",
         cached.record.context,
-      ].join("\\n"),
+      ].join("\n"),
     };
   }
   return required ? neoRemoteBrainFailureFile(workspaceDir, message) : null;
@@ -373,7 +373,7 @@ async function loadNeoRemoteBrainBootstrapFile(params: {
     if (!required) return null;
     const message = "The NEO Brain bridge is required but its endpoint/token is not configured.";
     params.warn?.(message);
-    return neoRemoteBrainFailureFile(params.workspaceDir, message);
+    return neoRemoteBrainCachedOrFailureFile(params.workspaceDir, message, required);
   }
 
   let url: URL;
