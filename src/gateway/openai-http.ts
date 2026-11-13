@@ -689,15 +689,6 @@ async function buildGeminXNeoReceiptBundle(params: {
     return null;
   }
 
-  const resultRecord =
-    params.result && typeof params.result === "object" && !Array.isArray(params.result)
-      ? params.result as Record<string, unknown>
-      : {};
-  const meta =
-    resultRecord.meta && typeof resultRecord.meta === "object" && !Array.isArray(resultRecord.meta)
-      ? resultRecord.meta as Record<string, unknown>
-      : {};
-
   const toolReceipts: Array<{
     tool_call_id: string;
     tool: string;
