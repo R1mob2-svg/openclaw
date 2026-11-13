@@ -152,7 +152,9 @@ neo_config_set agents.defaults.workspace "$workspace"
 # No separate scheduler or external send channel; existing gateway and budgets still apply.
 neo_config_set agents.defaults.heartbeat.every "1h"
 neo_config_set agents.defaults.model.primary "geminx-deepseek/deepseek-flash"
-neo_config_set agents.defaults.model.fallbacks "[]" --strict-json
+# Preserve the Founder-approved lanes across fresh Railway builds. Provider budgets
+# and failover fencing are still enforced by the existing model proxy.
+neo_config_set agents.defaults.model.fallbacks '["geminx-deepseek/deepseek-v4-pro","geminx-deepseek/geminx-auto"]' --strict-json
 # Founder 2026-11-10: DeepSeek Flash owns all BUILD, tool-use and continuation
 # turns. geminx-google-qa is a separate EXPLICIT no-paid-fallback verification
 # lane; it refuses to run unless the backend independently confirms Google's
@@ -186,6 +188,13 @@ neo_config_set agents.defaults.models "{\"geminx-deepseek/geminx-auto\":{},\"gem
 # transcript inflation and extended client-held requests (observed HTTP 499).
 # The model provider may support larger contexts, but interactive HQ is bounded.
 # Compact early while retaining durable Brain and tool receipts on disk.
+# Slim native model bootstrap. Full signed Brain remains on the existing
+# /home/node/.openclaw volume for targeted on-demand reads.
+neo_config_set agents.defaults.contextInjection "continuation-skip"
+neo_config_set agents.defaults.bootstrapMaxChars "6500" --strict-json
+neo_config_set agents.defaults.bootstrapTotalMaxChars "10000" --strict-json
+neo_config_set skills.limits.maxSkillsPromptChars "3000" --strict-json
+neo_config_set gateway.trustedProxies '["127.0.0.1","10.0.0.0/8","100.64.0.0/10"]' --strict-json
 neo_config_set agents.defaults.contextTokens "128000" --strict-json
 neo_config_set agents.defaults.compaction.reserveTokens "32000" --strict-json
 neo_config_set agents.defaults.compaction.keepRecentTokens "24000" --strict-json
