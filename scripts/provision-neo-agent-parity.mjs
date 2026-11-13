@@ -14,10 +14,11 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import JSON5 from "json5";
 
 export const AGENTS = Object.freeze([
   { id: "neo", name: "NEO", description: "Parent operating agent", portFrom: null, inheritFrom: "workspace" },
-  { id: "brian", name: "BRIAN", description: "Research and analysis", portFrom: "neo" },
+  { id: "brian", name: "BRIAN", description: "Autonomous Digital Ambush website designer and visual QA", portFrom: "neo" },
   { id: "mark", name: "MARK", description: "Marketing and outreach", portFrom: "neo" },
   { id: "kerry", name: "KERRY", description: "Operations and delivery", portFrom: "neo" },
   { id: "sophie", name: "SOPHIE", description: "Client service and communication", portFrom: "neo" },
@@ -34,7 +35,7 @@ export const PORTED_FILES = Object.freeze(["AGENTS.md", "TOOLS.md", "HEARTBEAT.m
 export const PERSONA_FILES = Object.freeze(["SOUL.md", "IDENTITY.md", "MEMORY.md"]);
 
 const PERSONA_ROLES = Object.freeze({
-  brian: "Research and analysis. Evidence first, no speculation presented as fact.",
+  brian: "Autonomous website architecture, live research, original HTML/CSS, image sourcing and Chromium visual QA. Read AG’s canonical GitHub Brain spec. Evidence first.",
   mark: "Marketing and outreach. Digital Ambush prospecting, mockups and review drafts.",
   kerry: "Operations and delivery. Keeps pipelines moving and records the receipts.",
   sophie: "Client service and communication. Clear, human, never corporate.",
@@ -132,13 +133,15 @@ export function provisionWorkspace({ root, id, sourceId, sourceDir, fsImpl = fs 
 }
 
 /** Merge the six agents into an agents block without disturbing other entries. */
-export function mergeAgentList(existingList = []) {
+export function mergeAgentList(existingList = [], root = process.env.OPENCLAW_STATE_DIR || "/home/node/.openclaw") {
   const byId = new Map(existingList.map((agent) => [agent.id, agent]));
   const ordered = [];
   for (const agent of AGENTS) {
     const existing = byId.get(agent.id);
     const base = existing ? { ...existing } : {};
-    ordered.push({ ...base, id: agent.id, name: agent.name, description: agent.description });
+    const next = { ...base, id: agent.id, name: agent.name, description: agent.description, workspace: base.workspace || workspacePath(root, agent.id) };
+    if (agent.id === "brian") next.tools = { ...(base.tools ?? {}), profile: "full" };
+    ordered.push(next);
     byId.delete(agent.id);
   }
   // Preserve any unrelated agents the founder configured later.
@@ -162,6 +165,13 @@ function main() {
   const root = rootArg > -1 ? process.argv[rootArg + 1] : (process.env.OPENCLAW_STATE_DIR || "/home/node/.openclaw");
   const dryRun = process.argv.includes("--dry-run");
 
+  if (dryRun) {
+    // Dry-run is genuinely read-only. No mkdir, persona or config rewrites.
+    for (const agent of AGENTS) console.log(`${agent.id} -> ${workspacePath(root, agent.id)} (dry-run; no writes)`);
+    console.log("\ndry-run: no writes performed");
+    return;
+  }
+
   for (const agent of AGENTS) {
     const plan = provisionWorkspace({
       root,
@@ -175,21 +185,24 @@ function main() {
     }
   }
 
-  if (dryRun) {
-    console.log("\ndry-run: no writes performed");
-    return;
-  }
-
   const configPath = path.join(root, "openclaw.json");
   if (!fs.existsSync(configPath)) {
     console.log(`\n${configPath} not found; workspace provisioning only`);
     return;
   }
-  const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  const config = JSON5.parse(fs.readFileSync(configPath, "utf8"));
   config.agents = config.agents ?? {};
-  const before = JSON.stringify(config.agents.list ?? []);
-  config.agents.list = mergeAgentList(config.agents.list ?? []);
-  if (JSON.stringify(config.agents.list) === before) {
+  const before = JSON.stringify({ list: config.agents.list ?? [], imageModel: config.agents.defaults?.imageModel });
+  config.agents.list = mergeAgentList(config.agents.list ?? [], root);
+  config.agents.defaults = config.agents.defaults ?? {};
+  // The model routing is inherited from the existing runtime. This setting
+  // selects vision for screenshot/image review, not image generation.
+  config.agents.defaults.imageModel = {
+    ...(config.agents.defaults.imageModel ?? {}),
+    primary: "google/gemini-2.5-flash",
+    fallbacks: ["google/gemini-3-flash-preview"],
+  };
+  if (JSON.stringify({ list: config.agents.list, imageModel: config.agents.defaults.imageModel }) === before) {
     console.log("\nopenclaw.json: agents.list already current");
     return;
   }
