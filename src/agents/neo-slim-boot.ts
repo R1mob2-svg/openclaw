@@ -26,7 +26,9 @@ function segmentsOf(context: string): Map<string, string> {
 }
 export function compactNeoBrain(input: NeoSlimBrainInput): string {
   const segments = segmentsOf(input.context);
-  const sourceSet = new Set(input.sourcePaths);
+  // Server may return source_paths separately; older on-disk cache has only
+  // the verified original context. Derive the same index from its source markers.
+  const sourceSet = new Set([...segments.keys(), ...input.sourcePaths]);
   if (!sourceSet.has(STATIC_RULES) || !sourceSet.has(ACTIVE_STATE) ||
       !segments.has(STATIC_RULES) || !segments.has(ACTIVE_STATE)) {
     // A missing doctrine is a continuity failure, not licence to substitute
