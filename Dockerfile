@@ -120,6 +120,10 @@ RUN if printf '%s\n' "$OPENCLAW_EXTENSIONS" | tr ',' ' ' | tr ' ' '\n' | grep -q
       export OPENCLAW_BUILD_PRIVATE_QA=1 OPENCLAW_ENABLE_PRIVATE_QA_CLI=1; \
     fi && \
     NODE_OPTIONS=--max-old-space-size=8192 pnpm_config_verify_deps_before_run=false pnpm build:docker
+# Do not ship a source-only geminx_device patch while the pinned Gateway loads
+# the compiled dist plugin. Fail the Docker build if any Windows alias is absent.
+RUN test -s dist/extensions/geminx-device-operator/index.js && \
+    node -e 'const fs=require("node:fs"); const content=fs.readFileSync("dist/extensions/geminx-device-operator/index.js","utf8"); for(const name of ["shell_exec","git_status","git_diff","process_list","file_read","desktop_snapshot","desktop_uia_scan","desktop_windows"]){ if(!content.includes("device_"+name)){ console.error("MISSING_COMPILED_DEVICE_ACTION:"+name); process.exit(1) } }'
 # Force pnpm for UI build (Bun may fail on ARM/Synology architectures)
 ENV OPENCLAW_PREFER_PNPM=1
 RUN pnpm_config_verify_deps_before_run=false pnpm ui:build
