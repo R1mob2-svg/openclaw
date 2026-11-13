@@ -129,6 +129,24 @@ describe("neo agent parity provisioner", () => {
     assert.ok(merged.some((a) => a.id === "custom-agent"));
   });
 
+  it("provides Brian full native tool access and a distinct stable workspace", () => {
+    const root=makeRoot();
+    const list=mergeAgentList([{id:"main",default:true}],root);
+    const brian=list.find(x=>x.id==="brian");
+    assert.equal(brian?.tools?.profile,"full");
+    assert.equal(brian?.workspace,workspacePath(root,"brian"));
+    assert.equal(list.find(x=>x.id==="main")?.default,true);
+  });
+  it("keeps user-provided Brian model routing rather than overwriting its model", () => {
+    const brian=mergeAgentList([{id:"main",default:true},{id:"brian",model:"custom/code-model"}])
+      .find(x=>x.id==="brian");
+    assert.equal(brian?.model,"custom/code-model");
+    assert.equal(brian?.tools?.profile,"full");
+  });
+  it("creates original main on an empty volume without making a specialist default", () => {
+    const list=mergeAgentList([],makeRoot());
+    assert.deepEqual(list.filter(x=>x.default).map(x=>x.id),["main"]);
+  });
   it("preserves an existing model override on a ported agent", () => {
     const merged = mergeAgentList([
       { id: "main", default: true },
