@@ -10,6 +10,7 @@ import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { resolveUserPath } from "../utils.js";
 import { resolveAgentConfig, resolveSessionAgentIds } from "./agent-scope.js";
 import { getOrLoadBootstrapFiles } from "./bootstrap-cache.js";
+import { readNeoRemoteBrainCache, saveNeoRemoteBrainCache } from "./neo-remote-brain-cache.js";
 import { applyBootstrapHookOverrides } from "./bootstrap-hooks.js";
 import type { EmbeddedContextFile } from "./embedded-agent-helpers.js";
 import {
@@ -319,6 +320,34 @@ function neoRemoteBrainFailureFile(
   };
 }
 
+async function neoRemoteBrainCachedOrFailureFile(
+  workspaceDir: string,
+  message: string,
+  required: boolean,
+): Promise<WorkspaceBootstrapFile | null> {
+  const cached = await readNeoRemoteBrainCache(workspaceDir);
+  if (cached) {
+    return {
+      name: "MEMORY.md",
+      path: path.join(workspaceDir, ".neo-remote-brain", "MEMORY.md"),
+      missing: false,
+      content: [
+        "# NEO canonical GitHub Brain — last verified snapshot",
+        "",
+        "REMOTE_BRAIN_STATUS=CACHED_VERIFIED",
+        "REMOTE_BRAIN_CURRENTLY_REACHABLE=UNVERIFIED",
+        "BRIDGE_ERROR=" + message,
+        "REVISION=" + cached.record.revision,
+        "CACHE_AGE_MS=" + cached.ageMs,
+        "This cached context is not a fresh GitHub read. Current runtime receipts take precedence.",
+        "",
+        cached.record.context,
+      ].join("\\n"),
+    };
+  }
+  return required ? neoRemoteBrainFailureFile(workspaceDir, message) : null;
+}
+
 /**
  * Load the canonical NEO Brain through GeminX immediately before model bootstrap.
  *
@@ -356,7 +385,7 @@ async function loadNeoRemoteBrainBootstrapFile(params: {
   } catch {
     const message = "The configured NEO Brain bridge URL is invalid.";
     params.warn?.(message);
-    return required ? neoRemoteBrainFailureFile(params.workspaceDir, message) : null;
+    return neoRemoteBrainCachedOrFailureFile(params.workspaceDir, message, required);
   }
 
   const controller = new AbortController();
@@ -378,7 +407,7 @@ async function loadNeoRemoteBrainBootstrapFile(params: {
     if (!response.ok) {
       const message = `NEO Brain bridge returned HTTP ${response.status}.`;
       params.warn?.(message);
-      return required ? neoRemoteBrainFailureFile(params.workspaceDir, message) : null;
+      return neoRemoteBrainCachedOrFailureFile(params.workspaceDir, message, required);
     }
 
     const payload = (await response.json()) as {
@@ -388,12 +417,14 @@ async function loadNeoRemoteBrainBootstrapFile(params: {
         context?: unknown;
         generated_at?: unknown;
         continuity?: unknown;
+        brain_revision?: unknown;
       };
       status?: unknown;
       sources?: unknown;
       context?: unknown;
       generated_at?: unknown;
       continuity?: unknown;
+      brain_revision?: unknown;
     };
     const data = payload.data && typeof payload.data === "object" ? payload.data : payload;
     const status = normalizeOptionalString(data.status);
@@ -401,13 +432,28 @@ async function loadNeoRemoteBrainBootstrapFile(params: {
     if (status !== "attached" || !context) {
       const message = `NEO Brain bridge did not return attached context (status=${status || "unknown"}).`;
       params.warn?.(message);
-      return required ? neoRemoteBrainFailureFile(params.workspaceDir, message) : null;
+      return neoRemoteBrainCachedOrFailureFile(params.workspaceDir, message, required);
     }
 
     const sourceCount = Array.isArray(data.sources) ? data.sources.length : 0;
     const generatedAt = normalizeOptionalString(data.generated_at) ?? new Date().toISOString();
     const continuity =
       normalizeOptionalString(data.continuity) ?? "ORIGINAL_NEO_CANONICAL_GITHUB_BRAIN";
+
+    const brainRevision = normalizeOptionalString(data.brain_revision);
+    // Only a verified revision from GeminX can create a new durable snapshot.
+    // An older backend without revision metadata remains readable live but
+    // cannot replace an existing verified cache.
+    if (brainRevision && /^[a-f0-9]{40}$/i.test(brainRevision)) {
+      const cached = await saveNeoRemoteBrainCache(params.workspaceDir, {
+        revision: brainRevision,
+        generated_at: generatedAt,
+        continuity,
+        source_count: sourceCount,
+        context,
+      });
+      if (!cached) params.warn?.("NEO Brain attached but durable cache write failed.");
+    }
 
     return {
       name: "MEMORY.md",
@@ -431,7 +477,7 @@ async function loadNeoRemoteBrainBootstrapFile(params: {
   } catch (error) {
     const message = `NEO Brain bridge request failed: ${error instanceof Error ? error.message : String(error)}`;
     params.warn?.(message);
-    return required ? neoRemoteBrainFailureFile(params.workspaceDir, message) : null;
+    return neoRemoteBrainCachedOrFailureFile(params.workspaceDir, message, required);
   } finally {
     clearTimeout(timeout);
   }
