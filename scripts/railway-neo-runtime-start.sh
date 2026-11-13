@@ -327,6 +327,12 @@ neo_config_set gateway.http.endpoints.chatCompletions.enabled "true" --strict-js
 # gateway bearer auth and does not expose an unauthenticated repair surface.
 node openclaw.mjs plugins enable admin-http-rpc
 
+# Restore and persist Brian's native agent workspace, full tool profile and
+# screenshot vision on EVERY Railway container boot (not merely in Git branches).
+# Brian chooses company facts/media from the live Brain and its tool research.
+neo_config_set agents.defaults.imageModel.primary "google/gemini-2.5-flash"
+neo_config_set agents.defaults.imageModel.fallbacks '["google/gemini-3-flash-preview"]' --strict-json
+node scripts/provision-neo-agent-parity.mjs
 node openclaw.mjs config validate
 
 # Railway runtime parity proof. The build verifies system libraries, but
