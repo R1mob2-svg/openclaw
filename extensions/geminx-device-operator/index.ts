@@ -13,8 +13,22 @@ const ACTION_TO_TOOL: Record<string, string> = {
   type_text: "device_type_text",
   global_action: "device_global_action",
   screenshot: "device_screenshot",
-  install_apk: "device_install_apk"
+  install_apk: "device_install_apk",
+  // Windows System Operator actions use the same authenticated GeminX bridge,
+  // not the Android device command namespace.
+  shell_exec: "device_shell_exec",
+  git_status: "device_git_status",
+  git_diff: "device_git_diff",
+  process_list: "device_process_list",
+  file_read: "device_file_read",
+  desktop_snapshot: "device_desktop_snapshot",
+  desktop_uia_scan: "device_desktop_uia_scan",
+  desktop_windows: "device_desktop_windows"
 };
+
+const WINDOWS_ONLY_ACTIONS = new Set([
+  "shell_exec", "git_status", "git_diff", "process_list", "file_read", "desktop_snapshot", "desktop_uia_scan", "desktop_windows"
+]);
 
 const GeminXDeviceSchema = Type.Object({
   action: Type.Union([
@@ -28,7 +42,15 @@ const GeminXDeviceSchema = Type.Object({
     Type.Literal("type_text"),
     Type.Literal("global_action"),
     Type.Literal("screenshot"),
-    Type.Literal("install_apk")
+    Type.Literal("install_apk"),
+    Type.Literal("shell_exec"),
+    Type.Literal("git_status"),
+    Type.Literal("git_diff"),
+    Type.Literal("process_list"),
+    Type.Literal("file_read"),
+    Type.Literal("desktop_snapshot"),
+    Type.Literal("desktop_uia_scan"),
+    Type.Literal("desktop_windows")
   ]),
   device_id: Type.Optional(Type.String()),
   url: Type.Optional(Type.String()),
@@ -50,7 +72,18 @@ const GeminXDeviceSchema = Type.Object({
     Type.Literal("quick_settings")
   ])),
   quality: Type.Optional(Type.Number()),
-  sha256: Type.Optional(Type.String())
+  sha256: Type.Optional(Type.String()),
+  command: Type.Optional(Type.String({ maxLength: 16000 })),
+  executable: Type.Optional(Type.String({ maxLength: 260 })),
+  args: Type.Optional(Type.Array(Type.String({ maxLength: 4096 }), { maxItems: 64 })),
+  cwd: Type.Optional(Type.String({ maxLength: 1024 })),
+  path: Type.Optional(Type.String({ maxLength: 1024 })),
+  timeout_ms: Type.Optional(Type.Integer({ minimum: 1000, maximum: 120000 })),
+  monitor_id: Type.Optional(Type.Integer({ minimum: 1, maximum: 16 })),
+  include_marks: Type.Optional(Type.Boolean()),
+  max_marks: Type.Optional(Type.Integer({ minimum: 1, maximum: 120 })),
+  mark_scope: Type.Optional(Type.Union([Type.Literal("foreground"), Type.Literal("desktop")])),
+  scope: Type.Optional(Type.Union([Type.Literal("foreground"), Type.Literal("desktop")]))
 });
 
 function bridgeUrl(): string {
@@ -84,6 +117,15 @@ function toolArgs(params: Record<string, unknown>, action: string): Record<strin
   if (action === "global_action") copy("global_action", "action");
   if (action === "screenshot") copy("quality");
   if (action === "install_apk") { copy("url"); copy("sha256"); }
+  if (action === "shell_exec") {
+    copy("command"); copy("executable"); copy("args"); copy("cwd"); copy("timeout_ms");
+  }
+  if (action === "git_status" || action === "git_diff") copy("cwd");
+  if (action === "file_read") copy("path");
+  if (action === "desktop_snapshot") {
+    copy("monitor_id"); copy("include_marks"); copy("max_marks"); copy("mark_scope");
+  }
+  if (action === "desktop_uia_scan") { copy("max_nodes"); copy("scope"); }
   return args;
 }
 
@@ -100,7 +142,12 @@ async function callBridge(tool: string, args: Record<string, unknown>, toolCallI
       tool_call_id: toolCallId,
       correlation_id: `openclaw:${toolCallId}`
     }),
-    signal: AbortSignal.timeout(tool === "device_screenshot" ? 80_000 : 50_000)
+    signal: AbortSignal.timeout(
+      tool === "device_screenshot" || tool === "device_desktop_snapshot" ||
+        tool === "device_shell_exec" ? 120_000 :
+        /^device_(?:git_status|git_diff|process_list|file_read|desktop_uia_scan|desktop_windows)$/.test(tool)
+          ? 120_000 : 50_000
+    )
   });
   const raw = await response.text();
   let payload: any;
@@ -116,15 +163,25 @@ function createGeminXDeviceTool(): AnyAgentTool {
     label: "GeminX Device",
     name: "geminx_device",
     description:
-      "Control Rob's paired GeminX Android device through the canonical Device Operator. " +
-      "Use action=list first when device_id is unknown, then status/ui_tree/screenshot before making claims about what is connected or visible. " +
-      "Use tap/swipe/type/open actions only when Rob asks. Google Photos remains denied by local policy unless Rob explicitly changes that policy.",
+      "Operate Rob's paired Android devices and authorised Windows host through the canonical authenticated GeminX bridge. " +
+      "Use action=list first; inspect the target status and supported_tools before calling a platform-specific action. " +
+      "Windows supports shell_exec, git_status, git_diff, process_list, file_read, desktop_snapshot, desktop_uia_scan and desktop_windows. " +
+      "ui_tree is Android-only. Never claim a Windows command succeeded without an execution receipt and relevant readback.",
     parameters: GeminXDeviceSchema,
     execute: async (toolCallId, rawArgs) => {
       const params = rawArgs as Record<string, unknown>;
       const action = String(params.action ?? "").trim();
       const tool = ACTION_TO_TOOL[action];
       if (!tool) throw new Error("Unsupported GeminX device action");
+      const windowsAction = WINDOWS_ONLY_ACTIONS.has(action);
+      if (windowsAction && !String(params.device_id ?? "").trim())
+        throw new Error("WINDOWS_DEVICE_ID_REQUIRED: select the paired Windows host");
+      if (action === "ui_tree") {
+        const status = await callBridge("device_status", { device_id: params.device_id }, toolCallId + ":platform");
+        const device = status?.data ?? {};
+        if (String(device.platform ?? "").toLowerCase().includes("windows"))
+          throw new Error("ANDROID_ONLY_UI_TREE: use desktop_uia_scan on the Windows host");
+      }
       const payload = await callBridge(tool, toolArgs(params, action), toolCallId);
       const data = payload?.data ?? null;
 

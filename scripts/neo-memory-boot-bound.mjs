@@ -8,9 +8,9 @@ import { createHash, randomUUID } from "node:crypto";
 const workspace = process.env.OPENCLAW_WORKSPACE_DIR || "/home/node/.openclaw/workspace";
 const memory = path.join(workspace, "MEMORY.md");
 const archiveDir = path.join(workspace, "memory", "archive");
-const MAX_BOOTSTRAP_CHARS = 18_000;
-const RETAIN_HEAD_CHARS = 5_000;
-const RETAIN_TAIL_CHARS = 7_000;
+const MAX_BOOTSTRAP_CHARS = 3_000;
+const RETAIN_HEAD_CHARS = 500;
+const RETAIN_TAIL_CHARS = 900;
 
 function atomicPrivateWrite(target, value) {
   const tmp = target + "." + process.pid + "." + randomUUID() + ".tmp";

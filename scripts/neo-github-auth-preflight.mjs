@@ -2,7 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const CODE_URL = "https://api.github.com/repos/R1mob2-svg/geminx-v2/contents/package.json";
-const CANDIDATES = ["GH_TOKEN", "GEMINX_REPO_ACCESS_TOKEN", "GITHUB_TOKEN", "GITHUB_PAT"];
+const CANDIDATES = ["GH_TOKEN", "GEMINX_REPO_ACCESS_TOKEN", "GITHUB_TOKEN", "GITHUB_PAT", "GEMINX_AGENT_BRAIN_TOKEN"];
 
 /** Find an existing credential that can actually read private GeminX source. */
 export async function selectNeoGithubSource(options = {}) {
