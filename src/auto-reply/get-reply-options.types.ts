@@ -124,6 +124,17 @@ export type GetReplyOptions = {
   onBlockReplyQueued?: (payload: ReplyPayload, context?: BlockReplyContext) => Promise<void> | void;
   onBlockReply?: (payload: ReplyPayload, context?: BlockReplyContext) => Promise<void> | void;
   onToolResult?: (payload: ReplyPayload) => Promise<void> | void;
+  /**
+   * Live milestone callback context supplied by HQ for a dispatched job turn.
+   * When present, tool lifecycle events are mirrored to the HQ activity endpoint
+   * so the Founder HQ GitHub/Railway/PC badges update mid-run.
+   */
+  progressContext?: {
+    callback_url?: string;
+    job_id?: string;
+    lease_epoch?: number | string | null;
+    token?: string;
+  };
   /** Called when a tool phase starts/updates, before summary payloads are emitted. */
   onToolStart?: (payload: {
     itemId?: string;
