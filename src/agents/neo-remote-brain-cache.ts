@@ -59,25 +59,29 @@ export async function saveNeoRemoteBrainCache(
   };
   const temp = cachedPath(workspaceDir) + "." + process.pid + "." + randomUUID() + ".tmp";
   const memoryFile = path.join(dir, "MEMORY.md");
+  const liveFile = path.join(dir, "brain-live.json");
+  const liveTemp = liveFile + "." + process.pid + "." + randomUUID() + ".tmp";
   try {
     await fs.mkdir(dir, { recursive: true, mode: 0o700 });
     await fs.writeFile(temp, JSON.stringify(record), { encoding: "utf8", mode: 0o600 });
     await fs.rename(temp, cachedPath(workspaceDir));
-    // A persisted memory file helps OpenClaw recover without an ephemeral injection.
-    // It must NOT claim that a future session is freshly synced with GitHub.
+    // Full hashed context lives on disk, never in injected MEMORY.md.
+    // Write as a separate named read target for targeted memory/file tools.
+    await fs.writeFile(liveTemp, JSON.stringify(record), { encoding: "utf8", mode: 0o600 });
+    await fs.rename(liveTemp, liveFile);
     await fs.writeFile(memoryFile, [
-      "# NEO last verified canonical GitHub Brain snapshot",
+      "# NEO verified Brain index pointer",
       "REMOTE_BRAIN_STATUS=LAST_KNOWN_VERIFIED",
-      "This file is a bounded historical snapshot, not proof of live GitHub synchronization.",
+      "Cached context is historical, not a fresh GitHub read.",
+      "Full context: " + liveFile,
       "REVISION=" + params.revision,
-      "GENERATED_AT=" + params.generated_at,
       "SAVED_AT=" + new Date(now).toISOString(),
-      "",
-      params.context,
+      "Use targeted file reads on brain-live.json; never inject the full file into one model turn.",
     ].join("\n"), { encoding: "utf8", mode: 0o600 });
     return true;
   } catch {
     try { await fs.unlink(temp); } catch { /* temp already renamed or not created */ }
+    try { await fs.unlink(liveTemp); } catch { /* no extra snapshot temp */ }
     return false;
   }
 }
