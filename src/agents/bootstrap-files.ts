@@ -418,6 +418,7 @@ async function loadNeoRemoteBrainBootstrapFile(params: {
         generated_at?: unknown;
         continuity?: unknown;
         brain_revision?: unknown;
+        cache_age_ms?: unknown;
       };
       status?: unknown;
       sources?: unknown;
@@ -425,6 +426,7 @@ async function loadNeoRemoteBrainBootstrapFile(params: {
       generated_at?: unknown;
       continuity?: unknown;
       brain_revision?: unknown;
+      cache_age_ms?: unknown;
     };
     const data = payload.data && typeof payload.data === "object" ? payload.data : payload;
     const status = normalizeOptionalString(data.status);
@@ -444,14 +446,18 @@ async function loadNeoRemoteBrainBootstrapFile(params: {
     // Only a verified revision from GeminX can create a new durable snapshot.
     // An older backend without revision metadata remains readable live but
     // cannot replace an existing verified cache.
-    if (brainRevision && /^[a-f0-9]{40}$/i.test(brainRevision)) {
+    const ageValue = Number(data.cache_age_ms ?? 0);
+    // Preserve provenance age across both caches. Re-saving a backend cache hit
+    // must not reset its TTL and extend an old snapshot indefinitely.
+    const validAge = Number.isFinite(ageValue) && ageValue >= 0 && ageValue <= 30 * 60 * 1000;
+    if (brainRevision && /^[a-f0-9]{40}$/i.test(brainRevision) && validAge) {
       const cached = await saveNeoRemoteBrainCache(params.workspaceDir, {
         revision: brainRevision,
         generated_at: generatedAt,
         continuity,
         source_count: sourceCount,
         context,
-      });
+      }, Date.now() - ageValue);
       if (!cached) params.warn?.("NEO Brain attached but durable cache write failed.");
     }
 
