@@ -89,6 +89,10 @@ case "$neo_github_source" in
     export GITHUB_PAT="$GH_TOKEN"
     ;;
   GITHUB_PAT) export GH_TOKEN="$GITHUB_PAT" ;;
+  GEMINX_AGENT_BRAIN_TOKEN)
+    export GH_TOKEN="$GEMINX_AGENT_BRAIN_TOKEN"
+    export GITHUB_PAT="$GH_TOKEN"
+    ;;
 esac
 if [ -n "$neo_github_source" ]; then
   export GIT_ASKPASS="/app/scripts/neo-git-askpass.sh"
