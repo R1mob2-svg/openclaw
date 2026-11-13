@@ -10,7 +10,7 @@ import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { resolveUserPath } from "../utils.js";
 import { resolveAgentConfig, resolveSessionAgentIds } from "./agent-scope.js";
 import { getOrLoadBootstrapFiles } from "./bootstrap-cache.js";
-import { readNeoRemoteBrainCache, saveNeoRemoteBrainCache } from "./neo-remote-brain-cache.js";
+import { neoRemoteBrainDirectory, readNeoRemoteBrainCache, saveNeoRemoteBrainCache } from "./neo-remote-brain-cache.js";
 import { compactNeoBrain } from "./neo-slim-boot.js";
 import { applyBootstrapHookOverrides } from "./bootstrap-hooks.js";
 import type { EmbeddedContextFile } from "./embedded-agent-helpers.js";
@@ -308,7 +308,7 @@ function neoRemoteBrainFailureFile(
 ): WorkspaceBootstrapFile {
   return {
     name: "MEMORY.md",
-    path: path.join(workspaceDir, ".neo-remote-brain", "MEMORY.md"),
+    path: path.join(neoRemoteBrainDirectory(workspaceDir), "MEMORY.md"),
     missing: false,
     content: [
       "# NEO canonical GitHub Brain bootstrap",
@@ -338,7 +338,7 @@ async function neoRemoteBrainCachedOrFailureFile(
       });
       return {
         name: "MEMORY.md",
-        path: path.join(workspaceDir, ".neo-remote-brain", "MEMORY.md"),
+        path: path.join(neoRemoteBrainDirectory(workspaceDir), "MEMORY.md"),
         missing: false,
         content: capsule,
       };
@@ -484,7 +484,7 @@ async function loadNeoRemoteBrainBootstrapFile(params: {
     }
     return {
       name: "MEMORY.md",
-      path: path.join(params.workspaceDir, ".neo-remote-brain", "MEMORY.md"),
+      path: path.join(neoRemoteBrainDirectory(params.workspaceDir), "MEMORY.md"),
       missing: false,
       content: capsule,
     };
