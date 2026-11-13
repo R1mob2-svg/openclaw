@@ -6,7 +6,7 @@ const SHA = /^[a-f0-9]{40}$/i;
 
 /** Read-only, pinned boot validation. A SHA is never invented from model prose. */
 export async function verifiedNeoBrainRef({ token, fetcher = fetch } = {}) {
-  const credential = String(token ?? process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? process.env.GITHUB_PAT ?? "").trim();
+  const credential = String(token ?? process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN ?? process.env.GITHUB_PAT ?? process.env.GEMINX_AGENT_BRAIN_TOKEN ?? "").trim();
   if (!credential) throw new Error("NEO_BRAIN_GITHUB_TOKEN_UNAVAILABLE");
   const headers = {
     authorization: `Bearer ${credential}`,
