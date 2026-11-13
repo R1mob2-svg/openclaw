@@ -16,15 +16,19 @@ const ACTION_TO_TOOL: Record<string, string> = {
   install_apk: "device_install_apk",
   // Windows System Operator actions use the same authenticated GeminX bridge,
   // not the Android device command namespace.
-  shell_exec: "system_shell_exec",
-  git_status: "system_git_status",
-  git_diff: "system_git_diff",
-  process_list: "system_process_list",
-  file_read: "system_file_read",
-  desktop_snapshot: "system_desktop_snapshot",
-  desktop_uia_scan: "system_desktop_uia_scan",
-  desktop_windows: "system_desktop_windows"
+  shell_exec: "device_shell_exec",
+  git_status: "device_git_status",
+  git_diff: "device_git_diff",
+  process_list: "device_process_list",
+  file_read: "device_file_read",
+  desktop_snapshot: "device_desktop_snapshot",
+  desktop_uia_scan: "device_desktop_uia_scan",
+  desktop_windows: "device_desktop_windows"
 };
+
+const WINDOWS_ONLY_ACTIONS = new Set([
+  "shell_exec", "git_status", "git_diff", "process_list", "file_read", "desktop_snapshot", "desktop_uia_scan", "desktop_windows"
+]);
 
 const GeminXDeviceSchema = Type.Object({
   action: Type.Union([
@@ -139,8 +143,10 @@ async function callBridge(tool: string, args: Record<string, unknown>, toolCallI
       correlation_id: `openclaw:${toolCallId}`
     }),
     signal: AbortSignal.timeout(
-      tool === "device_screenshot" || tool === "system_desktop_snapshot" ? 120_000 :
-        tool.startsWith("system_") ? 120_000 : 50_000
+      tool === "device_screenshot" || tool === "device_desktop_snapshot" ||
+        tool === "device_shell_exec" ? 120_000 :
+        /^device_(?:git_status|git_diff|process_list|file_read|desktop_uia_scan|desktop_windows)$/.test(tool)
+          ? 120_000 : 50_000
     )
   });
   const raw = await response.text();
@@ -167,7 +173,7 @@ function createGeminXDeviceTool(): AnyAgentTool {
       const action = String(params.action ?? "").trim();
       const tool = ACTION_TO_TOOL[action];
       if (!tool) throw new Error("Unsupported GeminX device action");
-      const windowsAction = tool.startsWith("system_");
+      const windowsAction = WINDOWS_ONLY_ACTIONS.has(action);
       if (windowsAction && !String(params.device_id ?? "").trim())
         throw new Error("WINDOWS_DEVICE_ID_REQUIRED: select the paired Windows host");
       if (action === "ui_tree") {
