@@ -21,6 +21,7 @@ import {
 } from "../agents/usage.js";
 import { createDefaultDeps } from "../cli/deps.js";
 import { agentCommandFromIngress } from "../commands/agent.js";
+import { createActivityEmitter } from "../../bin/neo-activity-emit.mjs";
 import type { GatewayHttpChatCompletionsConfig } from "../config/types.gateway.js";
 import { emitAgentEvent, onAgentEvent } from "../infra/agent-events.js";
 import { logWarn } from "../logger.js";
@@ -639,9 +640,37 @@ type GeminXNeoReceiptEvent = {
   ts: number;
 };
 
+/**
+ * Live progress callback context supplied by GeminX HQ for a Founder job turn.
+ * When present, each tool lifecycle event is mirrored to HQ's activity endpoint
+ * so the Live Execution Trail updates mid-run instead of only at completion.
+ */
+type GeminXProgressContext = {
+  callbackUrl: string;
+  token: string;
+  jobId: string;
+  leaseEpoch: number;
+};
+
 function singleHeader(req: IncomingMessage, name: string): string {
   const raw = req.headers[name.toLowerCase()];
   return Array.isArray(raw) ? String(raw[0] ?? "").trim() : String(raw ?? "").trim();
+}
+
+function resolveGeminXProgressContext(req: IncomingMessage): GeminXProgressContext | null {
+  if (singleHeader(req, "x-geminx-progress") !== "1") return null;
+  const callbackUrl = singleHeader(req, "x-geminx-progress-url");
+  const token = singleHeader(req, "x-geminx-progress-token");
+  const jobId = singleHeader(req, "x-geminx-job-id");
+  const leaseEpochRaw = singleHeader(req, "x-geminx-lease-epoch");
+  // Progress is best-effort telemetry. A malformed context must never fail the
+  // turn, so this returns null rather than throwing (unlike the receipt path).
+  if (!callbackUrl || !token || !jobId) return null;
+  if (!/^https:\/\//i.test(callbackUrl)) return null;
+  if (!/^[A-Za-z0-9._:-]{1,180}$/.test(jobId)) return null;
+  const leaseEpoch = Number(leaseEpochRaw);
+  if (!Number.isInteger(leaseEpoch) || leaseEpoch < 0) return null;
+  return { callbackUrl, token, jobId, leaseEpoch };
 }
 
 function resolveGeminXNeoReceiptContext(req: IncomingMessage): GeminXNeoReceiptContext | null {
@@ -1376,6 +1405,44 @@ export async function handleOpenAiHttpRequest(
         }
       })
     : () => {};
+
+  // Mirror tool lifecycle events to HQ's progress endpoint while the turn runs.
+  // Fire-and-forget and fail-open: telemetry must never fail or delay the turn.
+  const geminxProgressContext = resolveGeminXProgressContext(req);
+  const progressEmitter = geminxProgressContext
+    ? createActivityEmitter({
+        progressContext: {
+          callback_url: geminxProgressContext.callbackUrl,
+          token: geminxProgressContext.token,
+          job_id: geminxProgressContext.jobId,
+          lease_epoch: geminxProgressContext.leaseEpoch,
+        },
+      })
+    : null;
+  const stopProgressCapture = progressEmitter
+    ? onAgentEvent((evt) => {
+        if (evt.runId !== runId) return;
+        if (evt.stream !== "tool") return;
+        const data = evt.data;
+        const toolName = String(data?.name ?? data?.title ?? "").trim();
+        if (!toolName) return;
+        const phase = String(data?.phase ?? "").toLowerCase();
+        if (phase === "start") {
+          void progressEmitter.emitToolStart({ name: toolName, phase: "start", args: data?.args });
+          return;
+        }
+        // Only mirror a genuine terminal result; "update"/progress frames would
+        // spam the trail and inflate step_count.
+        if (phase === "result" || phase === "end" || phase === "error") {
+          const failed = data?.isError === true || phase === "error";
+          void progressEmitter.emitToolResult({
+            name: toolName,
+            status: failed ? "failed" : "done",
+            args: data?.args,
+          });
+        }
+      })
+    : () => {};
   const deps = createDefaultDeps();
   const mergedExtraSystemPrompt = [prompt.extraSystemPrompt, toolChoicePrompt]
     .filter((part): part is string => Boolean(part))
@@ -1542,6 +1609,7 @@ export async function handleOpenAiHttpRequest(
     } finally {
       stopWatchingDisconnect();
       stopNeoReceiptCapture();
+      stopProgressCapture();
     }
     return true;
   }
@@ -1589,7 +1657,7 @@ export async function handleOpenAiHttpRequest(
     maybeFinalize();
   };
 
-  const unsubscribe = onAgentEvent((evt) => {
+  const unsubscribeStream = onAgentEvent((evt) => {
     if (evt.runId !== runId) {
       return;
     }
@@ -1633,6 +1701,11 @@ export async function handleOpenAiHttpRequest(
       }
     }
   });
+
+  const unsubscribe = () => {
+    unsubscribeStream();
+    stopProgressCapture();
+  };
 
   stopWatchingDisconnect = watchClientDisconnect(req, res, abortController, () => {
     closed = true;

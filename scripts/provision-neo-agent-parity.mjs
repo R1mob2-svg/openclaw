@@ -195,7 +195,11 @@ function main() {
   }
   const config = JSON5.parse(fs.readFileSync(configPath, "utf8"));
   config.agents = config.agents ?? {};
-  const before = JSON.stringify({ list: config.agents.list ?? [], imageModel: config.agents.defaults?.imageModel });
+  const before = JSON.stringify({
+    list: config.agents.list ?? [],
+    imageModel: config.agents.defaults?.imageModel,
+    a2a: config.tools?.agentToAgent ?? null,
+  });
   config.agents.list = mergeAgentList(config.agents.list ?? [], root);
   config.agents.defaults = config.agents.defaults ?? {};
   // The model routing is inherited from the existing runtime. This setting
@@ -205,7 +209,18 @@ function main() {
     primary: "google/gemini-2.5-flash",
     fallbacks: ["google/gemini-3-flash-preview"],
   };
-  if (JSON.stringify({ list: config.agents.list, imageModel: config.agents.defaults.imageModel }) === before) {
+  // Cross-agent dispatch is required for Brian to hand finished builds to the
+  // other operating agents, so a Railway rebuild must not silently drop it.
+  // Merge the enable flag and union the allowlist rather than overwriting, so a
+  // founder-added agent is never evicted by a provision run.
+  config.tools = config.tools ?? {};
+  const existingA2A = config.tools.agentToAgent ?? {};
+  const allow = new Set(Array.isArray(existingA2A.allow) ? existingA2A.allow : []);
+  for (const agent of mergeAgentList(config.agents.list ?? [], root)) allow.add(agent.id);
+  config.tools.agentToAgent = { ...existingA2A, enabled: true, allow: [...allow] };
+  if (
+    JSON.stringify({ list: config.agents.list, imageModel: config.agents.defaults.imageModel, a2a: config.tools.agentToAgent }) === before
+  ) {
     console.log("\nopenclaw.json: agents.list already current");
     return;
   }
