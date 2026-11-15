@@ -12,6 +12,7 @@ import {
   provisionWorkspace,
   validateCandidateConfig,
   workspacePath,
+  main,
 } from "../scripts/provision-neo-agent-parity.mjs";
 
 function makeRoot() {
@@ -209,5 +210,32 @@ describe("neo agent parity provisioner", () => {
     };
 
     assert.equal(validateCandidateConfig(goodCandidate, root), true);
+  });
+
+  it("migrates persisted openclaw.json on disk containing invalid nested agentToAgent", () => {
+    const root = makeRoot();
+    const configPath = path.join(root, "openclaw.json");
+    const corruptedDiskConfig = {
+      agents: {
+        list: [
+          { id: "main", default: true },
+          { id: "brian", tools: { agentToAgent: { enabled: true, allow: ["neo"] }, profile: "full", invalidKey: "bad" } },
+        ],
+      },
+    };
+    fs.writeFileSync(configPath, JSON.stringify(corruptedDiskConfig, null, 2), "utf8");
+
+    // Execute provisioner main against the root directory
+    main({ root });
+
+    // Verify openclaw.json on disk was rewritten cleanly
+    const migrated = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    const brian = migrated.agents.list.find((a) => a.id === "brian");
+    assert.ok(brian, "Brian must be present");
+    assert.equal(brian.tools.profile, "full");
+    assert.equal(brian.tools.agentToAgent, undefined, "Nested agentToAgent must be stripped from disk");
+    assert.equal(brian.tools.invalidKey, undefined, "Invalid keys must be stripped from disk");
+    assert.equal(migrated.tools.agentToAgent.enabled, true, "Root tools.agentToAgent must be enabled");
+    assert.ok(migrated.tools.agentToAgent.allow.includes("brian"), "Root allowlist must include brian");
   });
 });

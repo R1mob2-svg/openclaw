@@ -139,6 +139,36 @@ export function provisionWorkspace({ root, id, sourceId, sourceDir, fsImpl = fs 
   return { id, dir, actions };
 }
 
+export const VALID_AGENT_TOOL_KEYS = Object.freeze(new Set([
+  "profile",
+  "allow",
+  "alsoAllow",
+  "deny",
+  "byProvider",
+  "toolsBySender",
+  "codeMode",
+  "elevated",
+  "exec",
+  "fs",
+  "loopDetection",
+  "message",
+  "sandbox",
+]));
+
+export function sanitizeAgentTools(rawTools, extra = {}) {
+  if (!rawTools || typeof rawTools !== "object") {
+    return Object.keys(extra).length > 0 ? { ...extra } : undefined;
+  }
+  const clean = {};
+  for (const [key, val] of Object.entries(rawTools)) {
+    if (VALID_AGENT_TOOL_KEYS.has(key) && key !== "agentToAgent") {
+      clean[key] = val;
+    }
+  }
+  Object.assign(clean, extra);
+  return Object.keys(clean).length > 0 ? clean : undefined;
+}
+
 /** Merge the six agents into an agents block without disturbing other entries. */
 export function mergeAgentList(existingList = [], root = process.env.OPENCLAW_STATE_DIR || "/home/node/.openclaw") {
   const byId = new Map(existingList.map((agent) => [agent.id, agent]));
@@ -148,11 +178,9 @@ export function mergeAgentList(existingList = [], root = process.env.OPENCLAW_ST
     const base = existing ? { ...existing } : {};
     const next = { ...base, id: agent.id, name: agent.name, description: agent.description, workspace: base.workspace || workspacePath(root, agent.id) };
     if (agent.id === "brian") {
-      const { agentToAgent: _ignoredA2A, ...validTools } = base.tools ?? {};
-      next.tools = { ...validTools, profile: "full" };
-    } else if (next.tools && typeof next.tools === "object") {
-      const { agentToAgent: _ignoredA2A, ...validTools } = next.tools;
-      next.tools = validTools;
+      next.tools = sanitizeAgentTools(base.tools, { profile: "full" });
+    } else if (base.tools && typeof base.tools === "object") {
+      next.tools = sanitizeAgentTools(base.tools);
     }
     ordered.push(next);
     byId.delete(agent.id);
@@ -161,8 +189,7 @@ export function mergeAgentList(existingList = [], root = process.env.OPENCLAW_ST
   for (const leftover of byId.values()) {
     const cleanLeftover = { ...leftover };
     if (cleanLeftover.tools && typeof cleanLeftover.tools === "object") {
-      const { agentToAgent: _ignoredA2A, ...validTools } = cleanLeftover.tools;
-      cleanLeftover.tools = validTools;
+      cleanLeftover.tools = sanitizeAgentTools(cleanLeftover.tools);
     }
     ordered.push(cleanLeftover);
   }
@@ -171,8 +198,8 @@ export function mergeAgentList(existingList = [], root = process.env.OPENCLAW_ST
   // Explicitly strip any invalid nested agentToAgent from every agent tools entry.
   for (const agent of ordered) {
     delete agent.default;
-    if (agent.tools && typeof agent.tools === "object") {
-      delete agent.tools.agentToAgent;
+    if (agent.tools) {
+      agent.tools = sanitizeAgentTools(agent.tools);
     }
   }
   let defaultAgent = ordered.find((agent) => agent.id === DEFAULT_AGENT_ID);
@@ -255,10 +282,10 @@ export function validateCandidateConfig(candidate, root = process.env.OPENCLAW_S
   return true;
 }
 
-function main() {
+export function main(options = {}) {
   const rootArg = process.argv.indexOf("--root");
-  const root = rootArg > -1 ? process.argv[rootArg + 1] : (process.env.OPENCLAW_STATE_DIR || "/home/node/.openclaw");
-  const dryRun = process.argv.includes("--dry-run");
+  const root = options.root || (rootArg > -1 ? process.argv[rootArg + 1] : (process.env.OPENCLAW_STATE_DIR || "/home/node/.openclaw"));
+  const dryRun = options.dryRun ?? process.argv.includes("--dry-run");
 
   if (dryRun) {
     // Dry-run is genuinely read-only. No mkdir, persona or config rewrites.
@@ -285,23 +312,16 @@ function main() {
     console.log(`\n${configPath} not found; workspace provisioning only`);
     return;
   }
-  const config = JSON5.parse(fs.readFileSync(configPath, "utf8"));
-  config.agents = config.agents ?? {};
-
-  // Clean persisted invalid agentToAgent from existing agents.list before merging
-  if (Array.isArray(config.agents.list)) {
-    for (const agent of config.agents.list) {
-      if (agent && agent.tools && typeof agent.tools === "object") {
-        delete agent.tools.agentToAgent;
-      }
-    }
-  }
-
-  const before = JSON.stringify({
-    list: config.agents.list ?? [],
-    imageModel: config.agents.defaults?.imageModel,
-    a2a: config.tools?.agentToAgent ?? null,
+  const rawDisk = fs.readFileSync(configPath, "utf8");
+  const diskConfig = JSON5.parse(rawDisk);
+  const diskBefore = JSON.stringify({
+    list: diskConfig.agents?.list ?? [],
+    imageModel: diskConfig.agents?.defaults?.imageModel,
+    a2a: diskConfig.tools?.agentToAgent ?? null,
   });
+
+  const config = JSON5.parse(rawDisk);
+  config.agents = config.agents ?? {};
   config.agents.list = mergeAgentList(config.agents.list ?? [], root);
   config.agents.defaults = config.agents.defaults ?? {};
   // The model routing is inherited from the existing runtime. This setting
@@ -320,9 +340,14 @@ function main() {
   const allow = new Set(Array.isArray(existingA2A.allow) ? existingA2A.allow : []);
   for (const agent of config.agents.list) allow.add(agent.id);
   config.tools.agentToAgent = { ...existingA2A, enabled: true, allow: [...allow] };
-  if (
-    JSON.stringify({ list: config.agents.list, imageModel: config.agents.defaults.imageModel, a2a: config.tools.agentToAgent }) === before
-  ) {
+
+  const candidateAfter = JSON.stringify({
+    list: config.agents.list,
+    imageModel: config.agents.defaults.imageModel,
+    a2a: config.tools.agentToAgent,
+  });
+
+  if (candidateAfter === diskBefore) {
     console.log("\nopenclaw.json: agents.list already current");
     return;
   }
