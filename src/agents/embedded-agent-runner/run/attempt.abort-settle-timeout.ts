@@ -19,5 +19,5 @@ export function resolveEmbeddedAbortSettleTimeoutMs(
   if (override !== undefined) {
     return override;
   }
-  return env.OPENCLAW_TEST_FAST === "1" ? 250 : 2_000;
+  return env.OPENCLAW_TEST_FAST === "1" ? 250 : 15_000;
 }
