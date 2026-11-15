@@ -170,7 +170,7 @@ export function sanitizeAgentTools(rawTools, extra = {}) {
 }
 
 /** Merge the six agents into an agents block without disturbing other entries. */
-export function mergeAgentList(existingList = [], root = process.env.OPENCLAW_STATE_DIR || "/home/node/.openclaw") {
+export function mergeAgentList(existingList = [], root = process.env.OPENCLAW_STATE_DIR || (process.platform === "win32" ? "C:\\Users\\tauru\\.openclaw" : "/home/node/.openclaw")) {
   const byId = new Map(existingList.map((agent) => [agent.id, agent]));
   const ordered = [];
   for (const agent of AGENTS) {
@@ -217,7 +217,7 @@ export function mergeAgentList(existingList = [], root = process.env.OPENCLAW_ST
  * Validates candidate configuration before overwriting the live openclaw.json file.
  * If candidate validation fails, aborts write immediately and preserves live config.
  */
-export function validateCandidateConfig(candidate, root = process.env.OPENCLAW_STATE_DIR || "/home/node/.openclaw") {
+export function validateCandidateConfig(candidate, root = process.env.OPENCLAW_STATE_DIR || (process.platform === "win32" ? "C:\\Users\\tauru\\.openclaw" : "/home/node/.openclaw")) {
   if (!candidate || typeof candidate !== "object") {
     throw new Error("Candidate configuration must be an object");
   }
@@ -284,7 +284,7 @@ export function validateCandidateConfig(candidate, root = process.env.OPENCLAW_S
 
 export function main(options = {}) {
   const rootArg = process.argv.indexOf("--root");
-  const root = options.root || (rootArg > -1 ? process.argv[rootArg + 1] : (process.env.OPENCLAW_STATE_DIR || "/home/node/.openclaw"));
+  const root = options.root || (rootArg > -1 ? process.argv[rootArg + 1] : (process.env.OPENCLAW_STATE_DIR || (process.platform === "win32" ? "C:\\Users\\tauru\\.openclaw" : "/home/node/.openclaw")));
   const dryRun = options.dryRun ?? process.argv.includes("--dry-run");
 
   if (dryRun) {
@@ -323,6 +323,15 @@ export function main(options = {}) {
 
   const config = JSON5.parse(rawDisk);
   config.agents = config.agents ?? {};
+
+  // Clean persisted invalid agentToAgent from existing agents.list before merging
+  if (Array.isArray(config.agents.list)) {
+    for (const agent of config.agents.list) {
+      if (agent && agent.tools && typeof agent.tools === "object") {
+        delete agent.tools.agentToAgent;
+      }
+    }
+  }
   config.agents.list = mergeAgentList(config.agents.list ?? [], root);
   config.agents.defaults = config.agents.defaults ?? {};
   // The model routing is inherited from the existing runtime. This setting
