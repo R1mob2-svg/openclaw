@@ -10,6 +10,7 @@ import {
   PORTED_FILES,
   mergeAgentList,
   provisionWorkspace,
+  validateCandidateConfig,
   workspacePath,
 } from "../scripts/provision-neo-agent-parity.mjs";
 
@@ -154,5 +155,59 @@ describe("neo agent parity provisioner", () => {
     ]);
     const brian = merged.find((a) => a.id === "brian");
     assert.deepEqual(brian.model, { primary: "special" });
+  });
+
+  it("strips invalid nested agentToAgent from every agent's tools while preserving valid profile", () => {
+    const merged = mergeAgentList([
+      { id: "main", default: true, tools: { agentToAgent: { enabled: true }, profile: "coding" } },
+      { id: "brian", tools: { agentToAgent: { enabled: true, allow: ["neo"] }, profile: "minimal" } },
+      { id: "custom", tools: { agentToAgent: { enabled: true }, profile: "full" } },
+    ]);
+
+    for (const agent of merged) {
+      if (agent.tools) {
+        assert.equal(agent.tools.agentToAgent, undefined, `${agent.id}.tools must not have agentToAgent`);
+      }
+    }
+    const brian = merged.find((a) => a.id === "brian");
+    assert.equal(brian?.tools?.profile, "full");
+    const main = merged.find((a) => a.id === "main");
+    assert.equal(main?.tools?.profile, "coding");
+    const custom = merged.find((a) => a.id === "custom");
+    assert.equal(custom?.tools?.profile, "full");
+  });
+
+  it("validates candidate configuration and rejects nested agentToAgent", () => {
+    const root = makeRoot();
+    const badCandidate = {
+      agents: {
+        list: [
+          { id: "main", default: true },
+          { id: "brian", tools: { agentToAgent: { enabled: true }, profile: "full" } },
+        ],
+      },
+    };
+
+    assert.throws(
+      () => validateCandidateConfig(badCandidate, root),
+      /agentToAgent is forbidden/,
+    );
+  });
+
+  it("validates candidate configuration and accepts valid clean config with root agentToAgent", () => {
+    const root = makeRoot();
+    const goodCandidate = {
+      agents: {
+        list: [
+          { id: "main", default: true },
+          { id: "brian", tools: { profile: "full" } },
+        ],
+      },
+      tools: {
+        agentToAgent: { enabled: true, allow: ["main", "brian", "neo"] },
+      },
+    };
+
+    assert.equal(validateCandidateConfig(goodCandidate, root), true);
   });
 });

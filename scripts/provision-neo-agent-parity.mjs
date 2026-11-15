@@ -14,6 +14,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import JSON5 from "json5";
 
 export const AGENTS = Object.freeze([
@@ -140,18 +141,33 @@ export function mergeAgentList(existingList = [], root = process.env.OPENCLAW_ST
     const existing = byId.get(agent.id);
     const base = existing ? { ...existing } : {};
     const next = { ...base, id: agent.id, name: agent.name, description: agent.description, workspace: base.workspace || workspacePath(root, agent.id) };
-    if (agent.id === "brian") next.tools = { ...(base.tools ?? {}), profile: "full" };
+    if (agent.id === "brian") {
+      const { agentToAgent: _ignoredA2A, ...validTools } = base.tools ?? {};
+      next.tools = { ...validTools, profile: "full" };
+    } else if (next.tools && typeof next.tools === "object") {
+      const { agentToAgent: _ignoredA2A, ...validTools } = next.tools;
+      next.tools = validTools;
+    }
     ordered.push(next);
     byId.delete(agent.id);
   }
   // Preserve any unrelated agents the founder configured later.
   for (const leftover of byId.values()) {
-    ordered.push(leftover);
+    const cleanLeftover = { ...leftover };
+    if (cleanLeftover.tools && typeof cleanLeftover.tools === "object") {
+      const { agentToAgent: _ignoredA2A, ...validTools } = cleanLeftover.tools;
+      cleanLeftover.tools = validTools;
+    }
+    ordered.push(cleanLeftover);
   }
   // Exactly one agent may be default, and it must stay the legacy HQ agent so a
   // provision run can never repoint the live founder session.
+  // Explicitly strip any invalid nested agentToAgent from every agent tools entry.
   for (const agent of ordered) {
     delete agent.default;
+    if (agent.tools && typeof agent.tools === "object") {
+      delete agent.tools.agentToAgent;
+    }
   }
   let defaultAgent = ordered.find((agent) => agent.id === DEFAULT_AGENT_ID);
   if (!defaultAgent) {
@@ -161,6 +177,76 @@ export function mergeAgentList(existingList = [], root = process.env.OPENCLAW_ST
     defaultAgent.default = true;
   }
   return ordered;
+}
+
+/**
+ * Strict schema validation gate for candidate configuration.
+ * Validates candidate configuration before overwriting the live openclaw.json file.
+ * If candidate validation fails, aborts write immediately and preserves live config.
+ */
+export function validateCandidateConfig(candidate, root = process.env.OPENCLAW_STATE_DIR || "/home/node/.openclaw") {
+  if (!candidate || typeof candidate !== "object") {
+    throw new Error("Candidate configuration must be an object");
+  }
+  if (!candidate.agents || typeof candidate.agents !== "object") {
+    throw new Error("Candidate configuration missing required 'agents' block");
+  }
+  if (!Array.isArray(candidate.agents.list)) {
+    throw new Error("Candidate configuration 'agents.list' must be an array");
+  }
+
+  const defaultAgents = candidate.agents.list.filter((a) => a.default === true);
+  if (defaultAgents.length > 1) {
+    throw new Error(`Multiple default agents configured: ${defaultAgents.map((a) => a.id).join(", ")}`);
+  }
+
+  for (let i = 0; i < candidate.agents.list.length; i++) {
+    const agent = candidate.agents.list[i];
+    if (!agent || typeof agent !== "object" || !agent.id || typeof agent.id !== "string") {
+      throw new Error(`agents.list[${i}] missing valid 'id'`);
+    }
+    if (agent.tools && typeof agent.tools === "object") {
+      if ("agentToAgent" in agent.tools) {
+        throw new Error(
+          `Invalid candidate config: agents.list[${i}] (${agent.id}).tools.agentToAgent is forbidden. agentToAgent must only reside at root config.tools.agentToAgent.`,
+        );
+      }
+    }
+  }
+
+  // Validate root config.tools.agentToAgent if present
+  if (candidate.tools?.agentToAgent) {
+    if (typeof candidate.tools.agentToAgent !== "object") {
+      throw new Error("root tools.agentToAgent must be an object");
+    }
+    if (candidate.tools.agentToAgent.allow && !Array.isArray(candidate.tools.agentToAgent.allow)) {
+      throw new Error("root tools.agentToAgent.allow must be an array");
+    }
+  }
+
+  // If openclaw executable is available and built, run strict openclaw config validate
+  const openclawEntry = path.resolve(process.cwd(), "openclaw.mjs");
+  if (fs.existsSync(openclawEntry)) {
+    const candidateTemp = path.join(root, `openclaw.json.validate.${process.pid}.${Date.now()}`);
+    try {
+      fs.writeFileSync(candidateTemp, `${JSON.stringify(candidate, null, 2)}\n`, "utf8");
+      const res = spawnSync(process.execPath, [openclawEntry, "config", "validate"], {
+        env: { ...process.env, OPENCLAW_CONFIG_PATH: candidateTemp },
+        encoding: "utf8",
+        timeout: 10000,
+      });
+      if (res.status !== 0 && !res.stderr?.includes("missing dist/entry")) {
+        const errorDetail = (res.stderr || res.stdout || `exit code ${res.status}`).trim();
+        throw new Error(`openclaw config validate rejected candidate: ${errorDetail}`);
+      }
+    } finally {
+      if (fs.existsSync(candidateTemp)) {
+        try { fs.unlinkSync(candidateTemp); } catch {}
+      }
+    }
+  }
+
+  return true;
 }
 
 function main() {
@@ -195,6 +281,16 @@ function main() {
   }
   const config = JSON5.parse(fs.readFileSync(configPath, "utf8"));
   config.agents = config.agents ?? {};
+
+  // Clean persisted invalid agentToAgent from existing agents.list before merging
+  if (Array.isArray(config.agents.list)) {
+    for (const agent of config.agents.list) {
+      if (agent && agent.tools && typeof agent.tools === "object") {
+        delete agent.tools.agentToAgent;
+      }
+    }
+  }
+
   const before = JSON.stringify({
     list: config.agents.list ?? [],
     imageModel: config.agents.defaults?.imageModel,
@@ -216,7 +312,7 @@ function main() {
   config.tools = config.tools ?? {};
   const existingA2A = config.tools.agentToAgent ?? {};
   const allow = new Set(Array.isArray(existingA2A.allow) ? existingA2A.allow : []);
-  for (const agent of mergeAgentList(config.agents.list ?? [], root)) allow.add(agent.id);
+  for (const agent of config.agents.list) allow.add(agent.id);
   config.tools.agentToAgent = { ...existingA2A, enabled: true, allow: [...allow] };
   if (
     JSON.stringify({ list: config.agents.list, imageModel: config.agents.defaults.imageModel, a2a: config.tools.agentToAgent }) === before
@@ -224,7 +320,20 @@ function main() {
     console.log("\nopenclaw.json: agents.list already current");
     return;
   }
-  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
+
+  // Validate candidate configuration before replacing live file
+  try {
+    validateCandidateConfig(config, root);
+  } catch (err) {
+    console.error(`\n[provision-neo] Candidate config validation FAILED: ${err.message}`);
+    console.error(`[provision-neo] ABORTING write. Live configuration preserved.`);
+    process.exit(1);
+  }
+
+  // Atomic replace: write candidate to tmpPath in same directory then atomic rename
+  const tmpPath = `${configPath}.tmp.${process.pid}.${Date.now()}`;
+  fs.writeFileSync(tmpPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  fs.renameSync(tmpPath, configPath);
   console.log(`\nopenclaw.json: agents.list updated (${config.agents.list.length} agents)`);
 }
 
