@@ -30,6 +30,8 @@ export const AGENTS = Object.freeze([
   { id: "kerry", name: "KERRY", description: "Operations and delivery", portFrom: "neo" },
   { id: "sophie", name: "SOPHIE", description: "Client service and communication", portFrom: "neo" },
   { id: "ads", name: "ADS", description: "Paid acquisition and campaigns", portFrom: "neo" },
+  { id: "newton", name: "NEWTON", description: "Architecture, audit, and deep debugging specialist", portFrom: "neo" },
+  { id: "miyagi", name: "MIYAGI", description: "Systems efficiency and DeepSeek reasoning specialist", portFrom: "neo" },
 ]);
 
 /** The legacy founder-facing agent. Never displaced by provisioning. */
@@ -47,6 +49,8 @@ const PERSONA_ROLES = Object.freeze({
   kerry: "Operations and delivery. Keeps pipelines moving and records the receipts.",
   sophie: "Client service and communication. Clear, human, never corporate.",
   ads: "Paid acquisition and campaign execution. Budget-aware, approval-bound.",
+  newton: "Architecture, root-cause autopsy, and deep debugging specialist. Evidence-backed, zero hand-waving.",
+  miyagi: "Systems efficiency, cost-disciplined execution, and precision implementation specialist.",
 });
 
 export function workspacePath(root, id) {

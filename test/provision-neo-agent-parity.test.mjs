@@ -34,10 +34,10 @@ function makeRoot() {
 }
 
 describe("neo agent parity provisioner", () => {
-  it("covers exactly the six required agents", () => {
+  it("covers all required agents including newton and miyagi", () => {
     assert.deepEqual(
       AGENTS.map((a) => a.id),
-      ["neo", "brian", "mark", "kerry", "sophie", "ads"],
+      ["neo", "brian", "mark", "kerry", "sophie", "ads", "newton", "miyagi"],
     );
   });
 

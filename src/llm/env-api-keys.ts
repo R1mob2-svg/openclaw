@@ -128,7 +128,12 @@ function hasVertexAdcCredentials(): boolean {
     }
 
     // Check GOOGLE_APPLICATION_CREDENTIALS env var first (standard way)
-    const gacPath = getEnvValue("GOOGLE_APPLICATION_CREDENTIALS");
+    const rawGacPath = getEnvValue("GOOGLE_APPLICATION_CREDENTIALS");
+    const isWindowsPathOnNonWin =
+      Boolean(rawGacPath && /^[A-Za-z]:[\\/]/.test(rawGacPath)) &&
+      typeof process !== "undefined" &&
+      process.platform !== "win32";
+    const gacPath = isWindowsPathOnNonWin ? undefined : rawGacPath;
     if (gacPath) {
       cachedVertexAdcCredentialsExists = nodeExistsSync(gacPath) ? true : null;
     } else {

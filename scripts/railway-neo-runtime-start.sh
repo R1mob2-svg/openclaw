@@ -1,6 +1,13 @@
 #!/bin/sh
 set -eu
 
+# Strip Windows GOOGLE_APPLICATION_CREDENTIALS paths on Linux container startup
+case "${GOOGLE_APPLICATION_CREDENTIALS:-}" in
+  [A-Za-z]:\\*|[A-Za-z]:/*)
+    unset GOOGLE_APPLICATION_CREDENTIALS
+    ;;
+esac
+
 workspace="${OPENCLAW_WORKSPACE_DIR:-/home/node/.openclaw/workspace}"
 mkdir -p "$workspace" "$workspace/memory"
 

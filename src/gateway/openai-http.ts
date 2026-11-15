@@ -1488,7 +1488,7 @@ export async function handleOpenAiHttpRequest(
   if (!stream) {
     const stopWatchingDisconnect = watchClientDisconnect(req, res, abortController);
     try {
-      const result = await agentCommandFromIngress(commandInput, defaultRuntime, deps);
+      let result = await agentCommandFromIngress(commandInput, defaultRuntime, deps);
 
       if (abortController.signal.aborted) {
         if (neoReceiptTerminalBlock) {
@@ -1500,9 +1500,25 @@ export async function handleOpenAiHttpRequest(
         return true;
       }
 
-      const usage = resolveChatCompletionUsage(result);
-      const meta = (result as { meta?: unknown } | null)?.meta;
-      const { stopReason, pendingToolCalls } = resolveStopReasonAndPendingToolCalls(meta);
+      let usage = resolveChatCompletionUsage(result);
+      let meta = (result as { meta?: unknown } | null)?.meta;
+      let { stopReason, pendingToolCalls } = resolveStopReasonAndPendingToolCalls(meta);
+
+      // If no tool calls are pending and the model returned an empty/fallback
+      // payload ("No response from OpenClaw."), perform one bounded in-gateway
+      // retry before failing so empty 4-token turns do not falsely complete.
+      if (
+        (!pendingToolCalls || pendingToolCalls.length === 0) &&
+        resolveAgentResponseText(result) === "No response from OpenClaw." &&
+        !abortController.signal.aborted
+      ) {
+        const retryRunId = `chatcmpl_${randomUUID()}`;
+        const retryInput = { ...commandInput, runId: retryRunId };
+        result = await agentCommandFromIngress(retryInput, defaultRuntime, deps);
+        usage = resolveChatCompletionUsage(result);
+        meta = (result as { meta?: unknown } | null)?.meta;
+        ({ stopReason, pendingToolCalls } = resolveStopReasonAndPendingToolCalls(meta));
+      }
 
       // `tool_choice` is an HTTP client-tool contract. The provider may still
       // ignore the prompt, so enforce after the run using structured pending
@@ -1550,6 +1566,16 @@ export async function handleOpenAiHttpRequest(
         return true;
       }
       const content = resolveAgentResponseText(result);
+      if (!content || content === "No response from OpenClaw.") {
+        sendJson(res, 502, {
+          error: {
+            message: "No response from OpenClaw.",
+            type: "api_error",
+            code: "OPENCLAW_EMPTY_RESPONSE",
+          },
+        });
+        return true;
+      }
 
       const neoReceiptBundle = neoReceiptContext
         ? await buildGeminXNeoReceiptBundle({

@@ -116,7 +116,11 @@ function resolveGoogleApplicationCredentialsPath(
   env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
   const explicit = normalizeOptionalString(env.GOOGLE_APPLICATION_CREDENTIALS);
-  if (explicit) {
+  const isWindowsPathOnNonWin =
+    Boolean(explicit && /^[A-Za-z]:[\\/]/.test(explicit)) &&
+    typeof process !== "undefined" &&
+    process.platform !== "win32";
+  if (explicit && !isWindowsPathOnNonWin) {
     return existsSync(explicit) ? explicit : undefined;
   }
   const homeDir = normalizeOptionalString(env.HOME) ?? os.homedir();
