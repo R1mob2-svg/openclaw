@@ -195,15 +195,33 @@ export function createActivityEmitter({
   }
 
   let sequence = 0;
+  let lastEmitAtMs = 0;
+  let lastEmitKey = "";
 
   async function emit({ phase, status, label, tool, eventId } = {}) {
+    const resolvedPhase = phase || (tool ? phaseForTool(tool) : "workspace");
+    const resolvedStatus = status || "running";
+    const resolvedLabel = label || formatLabel({ tool, status: resolvedStatus });
+    const nowMs = Date.now();
+    const dedupeKey = `${resolvedPhase}:${resolvedStatus}:${tool || ""}:${resolvedLabel}`;
+    if (!eventId && dedupeKey === lastEmitKey && nowMs - lastEmitAtMs < 1000) {
+      counters.skipped += 1;
+      return { ok: false, skipped: true, reason: "COALESCED" };
+    }
+    if (!eventId && resolvedStatus === "running" && nowMs - lastEmitAtMs < 350) {
+      counters.skipped += 1;
+      return { ok: false, skipped: true, reason: "COALESCED" };
+    }
+    lastEmitAtMs = nowMs;
+    lastEmitKey = dedupeKey;
+
     sequence += 1;
     const payload = buildActivityPayload({
       leaseEpoch: ctx.lease_epoch,
       eventId: eventId || `${ctx.job_id}:${sequence}`,
-      phase: phase || (tool ? phaseForTool(tool) : "workspace"),
-      status: status || "running",
-      label: label || formatLabel({ tool, status }),
+      phase: resolvedPhase,
+      status: resolvedStatus,
+      label: resolvedLabel,
       tool
     });
 
@@ -236,7 +254,9 @@ export function createActivityEmitter({
 
       if (isSilentFailure({ httpStatus, errorCode })) {
         counters.skipped += 1;
-        logger(`callback swallowed HTTP ${httpStatus}${errorCode ? ` ${errorCode}` : ""}`);
+        if (httpStatus !== 429 && errorCode !== "STEP_RATE_LIMITED") {
+          logger(`callback swallowed HTTP ${httpStatus}${errorCode ? ` ${errorCode}` : ""}`);
+        }
         return { ok: false, skipped: true, reason: errorCode || `HTTP_${httpStatus}`, httpStatus };
       }
 
