@@ -111,7 +111,7 @@ else
 fi
 
 # Ensure persisted openclaw.json on Railway is migrated cleanly on startup before gateway boot
-node scripts/provision-neo-agent-parity.mjs || true
+node scripts/provision-neo-agent-parity.mjs
 
 # Avoid restarting the entire OpenClaw config parser for unchanged values.
 # This is read-only; the native CLI still performs every real write and validates.

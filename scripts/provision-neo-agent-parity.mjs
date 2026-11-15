@@ -313,11 +313,12 @@ export function main(options = {}) {
     return;
   }
   const rawDisk = fs.readFileSync(configPath, "utf8");
-  const diskConfig = JSON5.parse(rawDisk);
+  const persistedConfig = JSON5.parse(rawDisk);
+  const beforeRaw = JSON.stringify(persistedConfig);
   const diskBefore = JSON.stringify({
-    list: diskConfig.agents?.list ?? [],
-    imageModel: diskConfig.agents?.defaults?.imageModel,
-    a2a: diskConfig.tools?.agentToAgent ?? null,
+    list: persistedConfig.agents?.list ?? [],
+    imageModel: persistedConfig.agents?.defaults?.imageModel,
+    a2a: persistedConfig.tools?.agentToAgent ?? null,
   });
 
   const config = JSON5.parse(rawDisk);
@@ -347,7 +348,7 @@ export function main(options = {}) {
     a2a: config.tools.agentToAgent,
   });
 
-  if (candidateAfter === diskBefore) {
+  if (candidateAfter === diskBefore && JSON.stringify(config) === beforeRaw) {
     console.log("\nopenclaw.json: agents.list already current");
     return;
   }
