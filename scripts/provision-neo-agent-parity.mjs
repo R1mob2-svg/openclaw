@@ -15,7 +15,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import JSON5 from "json5";
+
+let JSON5;
+try {
+  JSON5 = (await import("json5")).default;
+} catch {
+  JSON5 = JSON;
+}
 
 export const AGENTS = Object.freeze([
   { id: "neo", name: "NEO", description: "Parent operating agent", portFrom: null, inheritFrom: "workspace" },
