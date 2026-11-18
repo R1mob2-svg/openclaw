@@ -198,10 +198,10 @@ neo_config_set gateway.auth.mode "token"
 neo_config_set gateway.auth.token '{"source":"env","provider":"default","id":"OPENCLAW_GATEWAY_TOKEN"}' --strict-json --replace
 neo_config_set agents.defaults.models "{\"geminx-deepseek/geminx-auto\":{},\"geminx-deepseek/deepseek-flash\":{},\"geminx-deepseek/deepseek-v4-pro\":{},\"geminx-deepseek/geminx-google-qa\":{}}" --strict-json --replace
 
-# NEO runtime bounds the effective proxy context to 128k to avoid runaway
-# transcript inflation and extended client-held requests (observed HTTP 499).
-# The model provider may support larger contexts, but interactive HQ is bounded.
-# Compact early while retaining durable Brain and tool receipts on disk.
+# Founder's 1M DeepSeek V4.1 context is the canonical model ceiling.
+# Live cost/time safety remains in the GeminX proxy's per-turn budget,
+# continuation-depth, wall-clock, and output-token guards.
+# Compact only when necessary; keep durable Brain and tool receipts on disk.
 # Slim native model bootstrap. Full signed Brain remains on the existing
 # /home/node/.openclaw volume for targeted on-demand reads.
 neo_config_set agents.defaults.contextInjection "continuation-skip"
@@ -209,13 +209,17 @@ neo_config_set agents.defaults.bootstrapMaxChars "6500" --strict-json
 neo_config_set agents.defaults.bootstrapTotalMaxChars "10000" --strict-json
 neo_config_set skills.limits.maxSkillsPromptChars "3000" --strict-json
 neo_config_set gateway.trustedProxies '["127.0.0.1","10.0.0.0/8","100.64.0.0/10"]' --strict-json
-neo_config_set agents.defaults.contextTokens "128000" --strict-json
+neo_config_set agents.defaults.contextTokens "1000000" --strict-json
 neo_config_set agents.defaults.compaction.reserveTokens "32000" --strict-json
 neo_config_set agents.defaults.compaction.keepRecentTokens "24000" --strict-json
-neo_config_set agents.defaults.compaction.maxActiveTranscriptBytes "\"128kb\"" --strict-json
+neo_config_set agents.defaults.compaction.maxActiveTranscriptBytes "\"8mb\"" --strict-json
 neo_config_set agents.defaults.compaction.truncateAfterCompaction "true" --strict-json
 neo_config_set agents.defaults.compaction.midTurnPrecheck.enabled "true" --strict-json
 neo_config_set agents.defaults.compaction.notifyUser "false" --strict-json
+# Remove aged tool outputs after their cache TTL; do not pretend 1M tokens
+# requires keeping every stale tool result in active session history.
+neo_config_set agents.defaults.contextPruning.mode "cache-ttl"
+neo_config_set agents.defaults.contextPruning.ttl "1h"
 # Memory flush is OpenClaw housekeeping, not Founder conversation. Keep it on the raw provider lane.
 neo_config_set agents.defaults.compaction.memoryFlush.model "geminx-deepseek/deepseek-flash"
 
@@ -283,8 +287,8 @@ if (!baseUrl) process.exit(2);
 const common = {
   reasoning: true,
   input: ["text"],
-  // Enforce the bounded HQ interactive context; avoid unbounded transcripts
-  // repeatedly dominating DeepSeek tool calls and client timeout budgets.
+  // Legacy/Google-first aliases keep the conservative context limit.
+  // DeepSeek V4 Flash/Pro explicitly override this to the native 1M.
   contextWindow: 128000,
   maxTokens: 8192,
   cost: { input: 0.30, output: 1.20, cacheRead: 0.006, cacheWrite: 0 },
@@ -307,11 +311,12 @@ process.stdout.write(JSON.stringify({
     { id: "geminx-google-qa", name: "Read-only VERIFIED FREE Google QA / NO paid fallback", ...common, reasoning: false,
       contextWindow: 32768, maxTokens: 4096,
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
-    { id: "deepseek-flash", name: "DeepSeek V4.1 Flash", ...common },
+    { id: "deepseek-flash", name: "DeepSeek V4.1 Flash", ...common, contextWindow: 1000000 },
     {
       id: "deepseek-v4-pro",
       name: "DeepSeek V4 Pro",
       ...common,
+      contextWindow: 1000000,
       cost: { input: 1.32, output: 3.96, cacheRead: 0.044, cacheWrite: 0 }
     }
   ]
@@ -344,6 +349,29 @@ neo_config_set agents.defaults.imageModel.primary "google/gemini-2.5-flash"
 neo_config_set agents.defaults.imageModel.fallbacks '["google/gemini-3-flash-preview"]' --strict-json
 node scripts/provision-neo-agent-parity.mjs
 node openclaw.mjs config validate
+# Fail startup if a persisted volume, bootstrap migration or future repo change
+# silently regresses the validated DeepSeek V4 context below 1M.
+node - <<'NEO_CONTEXT_LOCK'
+const fs = require("node:fs");
+const path = require("node:path");
+const os = require("node:os");
+const JSON5 = require("json5");
+const root = process.env.OPENCLAW_STATE_DIR || path.join(os.homedir(), ".openclaw");
+const file = process.env.OPENCLAW_CONFIG_PATH || path.join(root, "openclaw.json");
+const cfg = JSON5.parse(fs.readFileSync(file, "utf8"));
+const deepseek = cfg.models?.providers?.["geminx-deepseek"]?.models ?? [];
+for (const id of ["deepseek-flash", "deepseek-v4-pro"]) {
+  const model = deepseek.find(item => item.id === id);
+  if (model?.contextWindow !== 1000000) {
+    throw new Error("[neo-context-lock] " + id + " contextWindow must equal 1000000");
+  }
+}
+if (cfg.agents?.defaults?.contextTokens !== 1000000 ||
+    cfg.agents?.defaults?.contextPruning?.mode !== "cache-ttl") {
+  throw new Error("[neo-context-lock] effective context/pruning configuration regressed");
+}
+console.log("[neo-context-lock] verified=true model=deepseek-flash contextWindow=1000000 contextTokens=1000000 pruning=cache-ttl");
+NEO_CONTEXT_LOCK
 
 # Railway runtime parity proof. The build verifies system libraries, but
 # Chromium binaries live on the persistent volume and may be older or missing.
