@@ -129,17 +129,24 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).toContain("GeminX HQ does not depend on this gateway for its own availability");
   });
 
-  it("preemptively compacts long Railway NEO sessions before transport or provider overflow", () => {
+  it("locks 1M DeepSeek context and cache-TTL pruning across Railway restarts", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
 
-    expect(script).toContain('agents.defaults.contextTokens "128000"');
+    expect(script).toContain('agents.defaults.contextTokens "1000000"');
     expect(script).toContain('agents.defaults.compaction.reserveTokens "32000"');
     expect(script).toContain('agents.defaults.compaction.keepRecentTokens "24000"');
-    expect(script).toContain('agents.defaults.compaction.maxActiveTranscriptBytes "\\"128kb\\""');
+    expect(script).toContain('agents.defaults.compaction.maxActiveTranscriptBytes "\\"8mb\\""');
     expect(script).toContain('agents.defaults.compaction.truncateAfterCompaction "true"');
     expect(script).toContain('agents.defaults.compaction.midTurnPrecheck.enabled "true"');
     expect(script).toContain('agents.defaults.compaction.notifyUser "false"');
     expect(script).not.toContain('agents.defaults.compaction.enabled');
+    expect(script).toContain('agents.defaults.contextPruning.mode "cache-ttl"');
+    expect(script).toContain('agents.defaults.contextPruning.ttl "1h"');
+    expect(script).toContain('name: "DeepSeek V4.1 Flash", ...common, contextWindow: 1000000');
+    expect(script).toContain("contextWindow: 1000000,");
+    expect(script).toContain("NEO_CONTEXT_LOCK");
+    expect(script).toContain("[neo-context-lock] verified=true");
+    expect(script).not.toContain('agents.defaults.contextTokens "128000"');
   });
 
   it("keeps Railway NEO memory recall available without requiring an OpenAI embedding key", () => {
