@@ -2285,7 +2285,14 @@ export function buildGatewaySessionRow(params: {
     model: rowModel,
     agentRuntime,
     contextTokens,
-    contextBudgetStatus: entry?.contextBudgetStatus,
+    // Never send a 128k-derived budget snapshot alongside a corrected 1M
+    // contextTokens field. Let the next real pre-prompt calculation refill it.
+    contextBudgetStatus:
+      neoConfiguredContext &&
+      entry?.contextBudgetStatus &&
+      entry.contextBudgetStatus.contextTokenBudget !== neoConfiguredContext
+        ? undefined
+        : entry?.contextBudgetStatus,
     deliveryContext: deliveryFields.deliveryContext,
     lastChannel: deliveryFields.lastChannel ?? entry?.lastChannel,
     lastTo: deliveryFields.lastTo ?? entry?.lastTo,

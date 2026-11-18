@@ -13,10 +13,15 @@ const TARGET = 1_000_000;
 const OLD = new Set([128_000, 131_072]);
 const MODEL = new Set(["deepseek-flash", "deepseek-v4-pro"]);
 function isTargetSession(row) {
-  if (!row || typeof row !== "object" || !OLD.has(row.contextTokens)) return false;
+  if (!row || typeof row !== "object") return false;
   const provider = String(row.modelProvider || row.providerOverride || "");
   const model = String(row.model || row.modelOverride || "");
-  return provider === "geminx-deepseek" && MODEL.has(model);
+  // Also repair stale pre-prompt budgets even when the entry contextTokens
+  // field has already been fixed by gateway status updates.
+  const staleWindow = OLD.has(row.contextTokens);
+  const staleBudget = OLD.has(row.contextBudgetStatus?.contextTokenBudget);
+  return provider === "geminx-deepseek" && MODEL.has(model) &&
+    (staleWindow || staleBudget);
 }
 export function repairNeoContextFile(file) {
   if (!fs.existsSync(file)) return { file: path.basename(file), scanned: 0, repaired: 0 };
@@ -30,7 +35,14 @@ export function repairNeoContextFile(file) {
     if (!row || typeof row !== "object") continue;
     scanned++;
     if (!isTargetSession(row)) continue;
-    row.contextTokens = TARGET;
+    if (OLD.has(row.contextTokens)) row.contextTokens = TARGET;
+    // Pre-prompt budget fields are derived from 128k; changing only the
+    // contextTokenBudget numeric field would leave contradictory reserves,
+    // overflow and remaining-budget figures. Drop stale snapshots entirely.
+    if (row.contextBudgetStatus &&
+        OLD.has(row.contextBudgetStatus.contextTokenBudget)) {
+      delete row.contextBudgetStatus;
+    }
     repaired++;
   }
   if (repaired) {

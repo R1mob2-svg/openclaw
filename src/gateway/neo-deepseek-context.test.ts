@@ -38,6 +38,7 @@ describe("Neo browser context-meter projection", () => {
       modelProvider: "geminx-deepseek",
       model: "deepseek-flash",
       contextTokens: 128000,
+      contextBudgetStatus: {contextTokenBudget: 128000, overflowTokens: 12},
       totalTokens: 32000,
       totalTokensFresh: true,
     };
@@ -47,6 +48,7 @@ describe("Neo browser context-meter projection", () => {
       store: { [key]: entry }, key, entry,
     });
     expect(row.contextTokens).toBe(1000000);
+    expect(row.contextBudgetStatus).toBeUndefined();
     expect(row.modelProvider).toBe("geminx-deepseek");
     expect(row.model).toBe("deepseek-flash");
     expect(row.totalTokens).toBe(32000);
