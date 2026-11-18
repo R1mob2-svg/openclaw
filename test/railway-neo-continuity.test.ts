@@ -226,7 +226,7 @@ describe("Railway NEO continuity bootstrap", () => {
     const script = fs.readFileSync("scripts/railway-neo-runtime-start.sh", "utf8");
     expect(script).toContain('agents.defaults.timeoutSeconds "900"');
     expect(script).toContain("[neo-timeout-lock] verified=true");
-    const match = script.match(/neo_config_set agents\\.defaults\\.model\\.fallbacks '([^']+)' --strict-json/);
+    const match = script.match(/neo_config_set agents\.defaults\.model\.fallbacks '([^']+)' --strict-json/);
     expect(match).toBeTruthy();
     expect(JSON.parse(match![1])).toEqual(["geminx-deepseek/deepseek-v4-pro"]);
     expect(script).toContain("contextWindow: 1000000");
