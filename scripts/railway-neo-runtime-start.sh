@@ -165,6 +165,14 @@ neo_config_set agents.defaults.workspace "$workspace"
 # Founder-approved hourly self-check. Persist through deployments in the canonical startup script.
 # No separate scheduler or external send channel; existing gateway and budgets still apply.
 neo_config_set agents.defaults.heartbeat.every "1h"
+# NEO 2026-11-18 (Railway Neil): persist the agent turn ceiling across redeploys.
+# Without this, every Railway deploy reset it to the 240s default and long tool
+# turns were killed mid-flight ("Command lane \"main\" task timed out after
+# 270000ms"). The main-lane ceiling is DERIVED, not separately configured:
+# resolveEmbeddedRunLaneTimeoutMs() = timeoutMs + EMBEDDED_RUN_LANE_TIMEOUT_GRACE_MS
+# (30_000), so 900s here yields the intended 930000ms lane ceiling. Do not set a
+# lane timeout by hand - it would be overwritten by that derivation.
+neo_config_set agents.defaults.timeoutSeconds "900"
 neo_config_set agents.defaults.model.primary "geminx-deepseek/deepseek-flash"
 # Preserve the Founder-approved lanes across fresh Railway builds. Provider budgets
 # and failover fencing are still enforced by the existing model proxy.
