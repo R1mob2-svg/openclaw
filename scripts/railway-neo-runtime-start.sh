@@ -373,6 +373,11 @@ if (cfg.agents?.defaults?.contextTokens !== 1000000 ||
 console.log("[neo-context-lock] verified=true model=deepseek-flash contextWindow=1000000 contextTokens=1000000 pruning=cache-ttl");
 NEO_CONTEXT_LOCK
 
+# sessions.list prefers persisted contextTokens. Upgrade only old DeepSeek V4
+# session rows, preserving every other provider, transcript and user setting.
+# This runs after validation and before gateway start, on EVERY Railway boot.
+node scripts/repair-neo-context-meter.mjs
+
 # Railway runtime parity proof. The build verifies system libraries, but
 # Chromium binaries live on the persistent volume and may be older or missing.
 # This is a bounded, read-only probe: no model calls, no remote browser session,
