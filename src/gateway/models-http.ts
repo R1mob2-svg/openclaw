@@ -1,6 +1,8 @@
 // OpenAI-compatible `/v1/models` HTTP route backed by configured OpenClaw agents.
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { listAgentIds, resolveDefaultAgentId } from "../agents/agent-scope.js";
+import { listAgentIds, resolveAgentEffectiveModelPrimary, resolveDefaultAgentId } from "../agents/agent-scope.js";
+import { resolveConfiguredNeoDeepSeekContext } from "./neo-deepseek-context.js";
+import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { getRuntimeConfig } from "../config/io.js";
 import type { AuthRateLimiter } from "./auth-rate-limit.js";
 import type { ResolvedGatewayAuth } from "./auth.js";
@@ -33,15 +35,24 @@ type OpenAiModelObject = {
   created: number;
   owned_by: string;
   permission: [];
+  context_window?: number;
+  underlying_model?: string;
 };
 
-function toOpenAiModel(id: string): OpenAiModelObject {
+function toOpenAiModel(id: string, cfg: OpenClawConfig): OpenAiModelObject {
+  const agentId = resolveAgentIdFromModel(id) || resolveDefaultAgentId(cfg);
+  const ref = resolveAgentEffectiveModelPrimary(cfg, agentId);
+  const slash = typeof ref === "string" ? ref.indexOf("/") : -1;
+  const provider = slash > 0 ? ref.slice(0, slash) : "";
+  const model = slash > 0 ? ref.slice(slash + 1) : "";
+  const context = resolveConfiguredNeoDeepSeekContext({ cfg, provider, model });
   return {
     id,
     object: "model",
     created: 0,
     owned_by: "openclaw",
     permission: [],
+    ...(context ? { context_window: context, underlying_model: ref } : {}),
   };
 }
 
@@ -104,10 +115,11 @@ export async function handleOpenAiModelsHttpRequest(
   }
 
   const ids = loadAgentModelIds();
+  const cfg = getRuntimeConfig();
   if (requestPath === "/v1/models") {
     sendJson(res, 200, {
       object: "list",
-      data: ids.map(toOpenAiModel),
+      data: ids.map((id) => toOpenAiModel(id, cfg)),
     });
     return true;
   }
@@ -141,6 +153,6 @@ export async function handleOpenAiModelsHttpRequest(
     return true;
   }
 
-  sendJson(res, 200, toOpenAiModel(decodedId));
+  sendJson(res, 200, toOpenAiModel(decodedId, cfg));
   return true;
 }
