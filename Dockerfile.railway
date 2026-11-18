@@ -74,7 +74,7 @@ RUN node --test test/neo-session-context-repair.test.mjs
 
 RUN NODE_OPTIONS=--max-old-space-size=8192 pnpm build:docker
 RUN pnpm exec vitest run src/gateway/neo-deepseek-context.test.ts src/agents/bootstrap-files-neo-brain.test.ts test/railway-neo-continuity.test.ts test/neo-agent-message-bus-auth.test.ts test/neo-agent-message-bus-execution.test.ts src/gateway/server/ws-connection/connect-policy.test.ts src/gateway/openai-http.neo-worker-receipt.test.ts src/agents/tools/image-generate-tool.test.ts
-RUN cd ui && pnpm exec vitest run --config vitest.node.config.ts src/ui/founder-auto-launch.node.test.ts
+RUN cd ui && pnpm exec vitest run --config vitest.node.config.ts src/ui/founder-auto-launch.node.test.ts src/ui/chat/context-notice.node.test.ts
 RUN pnpm ui:build
 
 RUN install -d -m 0700 -o node -g node /home/node/.openclaw /home/node/.openclaw/workspace

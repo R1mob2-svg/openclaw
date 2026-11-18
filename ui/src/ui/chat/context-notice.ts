@@ -67,7 +67,17 @@ export function getContextNoticeViewModel(
     return null;
   }
   const used = session?.totalTokens;
-  const limit = session?.contextTokens ?? defaultContextTokens ?? 0;
+  // The Control UI historically trusted stale sessions.json contextTokens over
+  // sessions.defaults; after upgrading Neo Flash to 1M, /new could still show
+  // '/ 128k' from a cached legacy row. Only correct this exact model when the
+  // gateway itself declares 1M as its active default. No global 128k override.
+  const neoOneMillion =
+    session?.modelProvider === "geminx-deepseek" &&
+    (session.model === "deepseek-flash" || session.model === "deepseek-v4-pro") &&
+    defaultContextTokens === 1_000_000;
+  const limit = neoOneMillion
+    ? 1_000_000
+    : (session?.contextTokens ?? defaultContextTokens ?? 0);
   if (typeof used !== "number" || !Number.isFinite(used) || used < 0 || !limit) {
     return null;
   }
