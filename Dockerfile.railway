@@ -67,12 +67,13 @@ COPY . .
 RUN node --test scripts/neo-verified-brain-ref.test.mjs
 # Verify NEO credential selection and terminal receipt truth on every production build.
 RUN node --test test/neo-github-auth-preflight.test.mjs test/neo-agent-bus-receipt-status.test.mjs
+RUN node --test test/neo-session-context-repair.test.mjs
 RUN node --test scripts/neo-memory-boot-bound.test.mjs scripts/neo-google-free-qa.test.mjs
 RUN corepack prepare "$(node -p "require('./package.json').packageManager")" --activate
 RUN pnpm install --frozen-lockfile
 
 RUN NODE_OPTIONS=--max-old-space-size=8192 pnpm build:docker
-RUN pnpm exec vitest run src/agents/bootstrap-files-neo-brain.test.ts test/railway-neo-continuity.test.ts test/neo-agent-message-bus-auth.test.ts test/neo-agent-message-bus-execution.test.ts src/gateway/server/ws-connection/connect-policy.test.ts src/gateway/openai-http.neo-worker-receipt.test.ts src/agents/tools/image-generate-tool.test.ts
+RUN pnpm exec vitest run src/gateway/neo-deepseek-context.test.ts src/agents/bootstrap-files-neo-brain.test.ts test/railway-neo-continuity.test.ts test/neo-agent-message-bus-auth.test.ts test/neo-agent-message-bus-execution.test.ts src/gateway/server/ws-connection/connect-policy.test.ts src/gateway/openai-http.neo-worker-receipt.test.ts src/agents/tools/image-generate-tool.test.ts
 RUN cd ui && pnpm exec vitest run --config vitest.node.config.ts src/ui/founder-auto-launch.node.test.ts
 RUN pnpm ui:build
 
