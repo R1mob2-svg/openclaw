@@ -7,6 +7,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import JSON5 from "json5";
 
 const TARGET = 1_000_000;
 const OLD = new Set([128_000, 131_072]);
@@ -63,7 +64,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(im
   // All config writes have happened and been validated before this script.
   // Do not run an unvalidated migration against the persistent store.
   const root = process.env.OPENCLAW_STATE_DIR || path.join(os.homedir(), ".openclaw");
-  const cfg = JSON.parse(fs.readFileSync(process.env.OPENCLAW_CONFIG_PATH ||
+  const cfg = JSON5.parse(fs.readFileSync(process.env.OPENCLAW_CONFIG_PATH ||
     path.join(root, "openclaw.json"), "utf8"));
   const models = cfg.models?.providers?.["geminx-deepseek"]?.models || [];
   if (cfg.agents?.defaults?.contextTokens !== TARGET ||
