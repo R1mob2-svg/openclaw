@@ -176,7 +176,9 @@ neo_config_set agents.defaults.timeoutSeconds "900"
 neo_config_set agents.defaults.model.primary "geminx-deepseek/deepseek-flash"
 # Preserve the Founder-approved lanes across fresh Railway builds. Provider budgets
 # and failover fencing are still enforced by the existing model proxy.
-neo_config_set agents.defaults.model.fallbacks '["geminx-deepseek/deepseek-v4-pro","geminx-deepseek/geminx-auto"]' --strict-json
+# Keep automatic fallbacks on matching 1M-context models only. geminx-auto
+# advertises 128k and causes sudden mid-turn precheck/compaction when selected.
+neo_config_set agents.defaults.model.fallbacks '["geminx-deepseek/deepseek-v4-pro"]' --strict-json
 # Founder 2026-11-10: DeepSeek Flash owns all BUILD, tool-use and continuation
 # turns. geminx-google-qa is a separate EXPLICIT no-paid-fallback verification
 # lane; it refuses to run unless the backend independently confirms Google's
