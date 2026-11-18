@@ -378,6 +378,18 @@ if (cfg.agents?.defaults?.contextTokens !== 1000000 ||
     cfg.agents?.defaults?.contextPruning?.mode !== "cache-ttl") {
   throw new Error("[neo-context-lock] effective context/pruning configuration regressed");
 }
+// This must be true on EVERY fresh container boot. A correct config on a
+// persistent volume is not proof that the next Railway deploy will keep it.
+const agentTimeoutSeconds = cfg.agents?.defaults?.timeoutSeconds;
+if (agentTimeoutSeconds !== 900) {
+  throw new Error("[neo-timeout-lock] expected agents.defaults.timeoutSeconds=900; found=" + String(agentTimeoutSeconds));
+}
+// OpenClaw run.ts adds a 30s lane grace to the embedded 900s deadline.
+const laneCeilingMs = agentTimeoutSeconds * 1000 + 30_000;
+if (laneCeilingMs < 930_000) {
+  throw new Error("[neo-timeout-lock] command main lane below 930000ms");
+}
+console.log("[neo-timeout-lock] verified=true agent_timeout_seconds=" + agentTimeoutSeconds + " expected_main_lane_timeout_ms=" + laneCeilingMs);
 console.log("[neo-context-lock] verified=true model=deepseek-flash contextWindow=1000000 contextTokens=1000000 pruning=cache-ttl");
 NEO_CONTEXT_LOCK
 
