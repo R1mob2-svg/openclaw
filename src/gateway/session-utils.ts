@@ -25,6 +25,7 @@ import {
 } from "../agents/agent-scope.js";
 import { lookupContextTokens, resolveContextTokensForModel } from "../agents/context.js";
 import { DEFAULT_CONTEXT_TOKENS, DEFAULT_MODEL, DEFAULT_PROVIDER } from "../agents/defaults.js";
+import { resolveConfiguredNeoDeepSeekContext } from "./neo-deepseek-context.js";
 import {
   findModelCatalogEntry,
   modelSupportsInput,
@@ -2171,7 +2172,14 @@ export function buildGatewaySessionRow(params: {
         entry,
         rowContext: params.rowContext,
       }) ?? resolveNonNegativeNumber(transcriptUsage?.estimatedCostUsd));
-  const contextTokens = lightweight
+  // Browser meter reads this sessions.list field. Legacy sessions.json still
+  // contains 128k even after the model configuration was corrected to 1M.
+  // For the exact explicitly configured Neo DeepSeek models, model contract
+  // outranks stale persisted/transcript metadata. All other models are unchanged.
+  const neoConfiguredContext = resolveConfiguredNeoDeepSeekContext({
+    cfg, provider: rowModelProvider, model: rowModel,
+  });
+  const contextTokens = neoConfiguredContext ?? (lightweight
     ? (resolvePositiveNumber(entry?.contextTokens) ??
       resolvePositiveNumber(
         resolveContextTokensForModel({
@@ -2190,7 +2198,7 @@ export function buildGatewaySessionRow(params: {
           model: rowModel,
           allowAsyncLoad: false,
         }),
-      ));
+      )));
 
   let derivedTitle: string | undefined;
   let lastMessagePreview: string | undefined;
