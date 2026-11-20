@@ -159,6 +159,7 @@ export type ExecProcessFailureKind =
   | "shell-not-executable"
   | "overall-timeout"
   | "no-output-timeout"
+  | "nonzero-exit"
   | "signal"
   | "aborted"
   | "runtime-error";
@@ -520,6 +521,9 @@ function classifyExecFailureKind(params: {
   if (params.isShellFailure) {
     return params.exitCode === 127 ? "shell-command-not-found" : "shell-not-executable";
   }
+  if (params.exitReason === "exit" && params.exitCode !== 0) {
+    return "nonzero-exit";
+  }
   if (params.exitReason === "overall-timeout") {
     return "overall-timeout";
   }
@@ -537,6 +541,7 @@ export function formatExecFailureReason(params: {
   failureKind: ExecExitFailureKind;
   exitSignal: NodeJS.Signals | number | null;
   timeoutSec: number | null | undefined;
+  exitCode?: number | null;
 }): string {
   switch (params.failureKind) {
     case "shell-command-not-found":
@@ -549,6 +554,8 @@ export function formatExecFailureReason(params: {
         : "Command timed out. If this command is expected to take longer, re-run with a higher timeout (e.g., exec timeout=300). If it should keep running, start it with exec background=true or yieldMs so OpenClaw can register a pollable process session. Do not rely on shell backgrounding with a trailing &.";
     case "no-output-timeout":
       return "Command timed out waiting for output";
+    case "nonzero-exit":
+      return `Command exited with non-zero code ${params.exitCode ?? "unknown"}; execution failed`;
     case "signal":
       return `Command aborted by signal ${params.exitSignal}`;
     case "aborted":
@@ -564,25 +571,26 @@ export function buildExecExitOutcome(params: {
   durationMs: number;
   timeoutSec: number | null | undefined;
 }): ExecProcessOutcome {
-  const exitCode = params.exit.exitCode ?? 0;
+  // A missing exit code is never success, even when the process claims "exit".
+  const exitCode = params.exit.exitCode;
   const isNormalExit = params.exit.reason === "exit";
   const isShellFailure = exitCode === 126 || exitCode === 127;
   const status: ExecProcessOutcome["status"] =
-    isNormalExit && !isShellFailure ? "completed" : "failed";
+    isNormalExit && exitCode === 0 ? "completed" : "failed";
   if (status === "completed") {
-    const exitMsg = exitCode !== 0 ? `\n\n(Command exited with code ${exitCode})` : "";
     return {
       status: "completed",
-      exitCode,
+      exitCode: 0,
       exitSignal: params.exit.exitSignal,
       durationMs: params.durationMs,
-      aggregated: params.aggregated + exitMsg,
+      // A valid zero-output command is legal, but never silently blank.
+      aggregated: params.aggregated || "Command exited with code 0 (no stdout or stderr).",
       timedOut: false,
     };
   }
   const failureKind = classifyExecFailureKind({
     exitReason: params.exit.reason,
-    exitCode,
+    exitCode: exitCode ?? -1,
     isShellFailure,
     exitSignal: params.exit.exitSignal,
   });
@@ -590,6 +598,7 @@ export function buildExecExitOutcome(params: {
     failureKind,
     exitSignal: params.exit.exitSignal,
     timeoutSec: params.timeoutSec,
+    exitCode,
   });
   return {
     status: "failed",
