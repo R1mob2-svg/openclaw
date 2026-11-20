@@ -18,6 +18,12 @@ function file(root,name,content="artifact") {
   fs.writeFileSync(pathName,content);
   return pathName;
 }
+function markDisposable(root, relative) {
+  fs.writeFileSync(path.join(root, relative) + ".disposable.json", JSON.stringify({
+    schema: "runtime-disposable.v1", file: relative, completed: true,
+    externallySaved: true, safeToPrune: true
+  }));
+}
 afterEach(()=>{ for(const r of roots.splice(0))fs.rmSync(r,{recursive:true,force:true}); });
 const future=Date.now()+30*86400_000;
 const limits={capacityBytes:25*1024*1024,reserveBytes:1*1024*1024};
@@ -26,6 +32,7 @@ describe("NEO 5GB volume guardian: fail closed and never delete live state",()=>
   it("inventories disk via du and leaves all files untouched by default",()=>{
     const root=setup();
     const candidate=file(root,"tmp/neo-triage/old.log","candidate");
+    markDisposable(root,"tmp/neo-triage/old.log");
     const report=retentionSweep(root,{...limits,nowMs:future});
     assert.equal(report.dryRun,true);
     assert.equal(report.candidates.length,1);
@@ -38,6 +45,8 @@ describe("NEO 5GB volume guardian: fail closed and never delete live state",()=>
     const a=file(root,"tmp/neo-triage/old.log","A".repeat(8_000));
     const b=file(root,"cache/neo-ephemeral/old.cache","B".repeat(5000));
     const c=file(root,"logs/rotated/openclaw.1.log","C".repeat(5000));
+    markDisposable(root,"tmp/neo-triage/old.log");
+    markDisposable(root,"cache/neo-ephemeral/old.cache");
     const report=retentionSweep(root,{...limits,nowMs:future,apply:true});
     assert.equal(report.candidates.filter(x=>x.action==="PRUNED").length,3);
     for(const pathName of [a,b,c])assert.equal(fs.existsSync(pathName),false);
@@ -52,6 +61,7 @@ describe("NEO 5GB volume guardian: fail closed and never delete live state",()=>
       "memory/notes.md","queue/outstanding.json","ledgers/receipts.json",
       "tmp/neo-triage/customer-receipt.tmp",
       "tmp/neo-triage/active-session.tmp",
+      "tmp/neo-triage/unmarked.tmp",
       "tmp/neo-triage/unpushed-code.ts",
       "tmp/neo-triage/store.sqlite",
       "logs/rotated/unrecognised.1.log"
