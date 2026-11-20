@@ -62,6 +62,9 @@ RUN /bin/bash -c 'set -euo pipefail; available="$(ldconfig -p)"; for so in \
     done'
 
 COPY . .
+# Run retention safety tests before package installation/build. Never ship a
+# guardian that can remove live sessions, source, locks or receipts.
+RUN node --test scripts/neo-volume-guardian.test.mjs
 # No paid inference or network: fail build if the signed-receipt Brain
 # reference cannot be pinned to the exact canonical NEO factory doctrine.
 RUN node --test scripts/neo-verified-brain-ref.test.mjs
