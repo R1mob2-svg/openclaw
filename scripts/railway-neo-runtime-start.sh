@@ -8,6 +8,27 @@ case "${GOOGLE_APPLICATION_CREDENTIALS:-}" in
     ;;
 esac
 
+# Founder-authorised ADDED-14, 2026-11-20: automatically prune only proven,
+# expired disposable files. Explicit emergency disable remains possible.
+# This changes no session, message, queue, ledger, receipt or uncommitted source.
+neo_volume_root="${OPENCLAW_STATE_DIR:-/home/node/.openclaw}"
+if [ "${NEO_SAFE_RETENTION_DISABLE:-0}" = "1" ]; then
+  export NEO_SAFE_RETENTION_APPLY=0
+  echo "[volume-guard] RETENTION_EMERGENCY_DISABLED=true"
+else
+  export NEO_SAFE_RETENTION_APPLY=1
+  if [ -d "$neo_volume_root" ]; then
+    # Run once BEFORE boot writes. No blanket rm and no recursive deletion.
+    if node scripts/neo-volume-guardian.mjs --root "$neo_volume_root" --apply; then
+      echo "[volume-guard] startup_allowlisted_prune=completed"
+    else
+      echo "[volume-guard] startup_allowlisted_prune=FAILED; disk headroom not proven" >&2
+    fi
+  else
+    echo "[volume-guard] mounted_state_directory_missing; no cleanup was performed" >&2
+  fi
+fi
+
 workspace="${OPENCLAW_WORKSPACE_DIR:-/home/node/.openclaw/workspace}"
 mkdir -p "$workspace" "$workspace/memory"
 
@@ -495,9 +516,9 @@ NEO_RAILWAY_PARITY
 # GitHub issue bus is a durable coordination ingress for NEO. Run it as a
 # sidecar in the same container so AGENT_MESSAGE_BUS envelopes are actually
 # materialized into the persistent OpenClaw runtime instead of sitting unread.
-# One in-process volume watcher. Default is inventory-only: no deletion.
-# Scoped pruning requires explicit NEO_SAFE_RETENTION_APPLY=1 AFTER reviewing
-# candidate reports. Never touch sessions, queues, ledgers, code or receipts.
+# Exactly one in-process volume watcher. Founder-approved scoped retention
+# applies on startup and every 15 minutes unless emergency-disabled. Never
+# touch sessions, queues, ledgers, code or receipts.
 neo_guard_apply=""
 if [ "${NEO_SAFE_RETENTION_APPLY:-0}" = "1" ]; then
   neo_guard_apply="--apply"
