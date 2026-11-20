@@ -362,6 +362,16 @@ export function createReadToolDefinition(
               } else {
                 selectedContent = allLines.slice(startLine).join("\n");
               }
+              // Reading an empty/whitespace-only selection is not evidence the
+              // requested source was read successfully. Surface a precise
+              // tool error so the agent cannot silently proceed as though
+              // it inspected content that was never present.
+              if (!selectedContent.trim()) {
+                throw new Error(
+                  "READ_EMPTY_OUTPUT: " + path +
+                  " (selected file content is blank; check path, offset and source before proceeding)",
+                );
+              }
               // Apply truncation, respecting both line and byte limits.
               const truncation = truncateHead(selectedContent);
               let outputText: string;
