@@ -162,6 +162,25 @@ NEO_CONFIG_MATCH
 }
 
 neo_config_set agents.defaults.workspace "$workspace"
+# Railway volume retention: native OpenClaw rotating logs, not log files in
+# arbitrary workspace/session directories. stdout remains Railway-managed.
+neo_volume_root="${OPENCLAW_STATE_DIR:-/home/node/.openclaw}"
+if mkdir -p "$neo_volume_root/logs"; then
+  neo_config_set logging.file "$neo_volume_root/logs/neo-runtime.log"
+  neo_config_set logging.maxFileBytes "8388608" --strict-json
+  neo_config_set logging.level "info"
+  echo "[volume-guard] native_log_rotation=8MiB backups=5 active_sessions=UNTOUCHED"
+else
+  echo "[volume-guard] LOG_DIRECTORY_UNWRITABLE: retaining existing logging; inspect disk" >&2
+fi
+# Retain standard completed cron session/run-history bounds. Do NOT enforce
+# session pruning: valuable recovery transcripts, checkpoints and receipts
+# must never be removed automatically to create disk headroom.
+neo_config_set cron.sessionRetention "24h"
+neo_config_set cron.runLog.maxBytes "2000000" --strict-json
+neo_config_set cron.runLog.keepLines "2000" --strict-json
+neo_config_set session.maintenance.mode "warn"
+
 # Founder-approved hourly self-check. Persist through deployments in the canonical startup script.
 # No separate scheduler or external send channel; existing gateway and budgets still apply.
 neo_config_set agents.defaults.heartbeat.every "1h"
@@ -476,8 +495,18 @@ NEO_RAILWAY_PARITY
 # GitHub issue bus is a durable coordination ingress for NEO. Run it as a
 # sidecar in the same container so AGENT_MESSAGE_BUS envelopes are actually
 # materialized into the persistent OpenClaw runtime instead of sitting unread.
+# One in-process volume watcher. Default is inventory-only: no deletion.
+# Scoped pruning requires explicit NEO_SAFE_RETENTION_APPLY=1 AFTER reviewing
+# candidate reports. Never touch sessions, queues, ledgers, code or receipts.
+neo_guard_apply=""
+if [ "${NEO_SAFE_RETENTION_APPLY:-0}" = "1" ]; then
+  neo_guard_apply="--apply"
+fi
+node scripts/neo-volume-guardian.mjs --root "$neo_volume_root" --watch $neo_guard_apply &
+neo_guard_pid=$!
+
 node scripts/poll-agent-message-bus.mjs &
 agent_bus_pid=$!
-trap 'kill "$agent_bus_pid" 2>/dev/null || true' EXIT INT TERM
+trap 'kill "$agent_bus_pid" "$neo_guard_pid" 2>/dev/null || true' EXIT INT TERM
 
 node openclaw.mjs gateway --allow-unconfigured --bind lan --port 8080
