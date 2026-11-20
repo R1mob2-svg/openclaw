@@ -38,7 +38,7 @@ describe("Railway NEO continuity bootstrap", () => {
     expect(script).toContain('"geminx-deepseek/deepseek-v4-pro"');
     // geminx-auto remains registered for explicitly approved free-first QA,
     // but MUST NOT be an automatic fallback from the million-context worker.
-    const fallbackLine = script.match(/neo_config_set agents\\.defaults\\.model\\.fallbacks '([^']+)' --strict-json/);
+    const fallbackLine = script.match(/neo_config_set agents\.defaults\.model\.fallbacks '([^']+)' --strict-json/);
     expect(fallbackLine).toBeTruthy();
     expect(JSON.parse(fallbackLine![1])).toEqual(["geminx-deepseek/deepseek-v4-pro"]);
     expect(script).toContain('agents.defaults.thinkingDefault "off"');
