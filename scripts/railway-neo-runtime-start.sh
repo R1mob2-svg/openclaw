@@ -478,6 +478,17 @@ NEO_RAILWAY_PARITY
 # materialized into the persistent OpenClaw runtime instead of sitting unread.
 node scripts/poll-agent-message-bus.mjs &
 agent_bus_pid=$!
-trap 'kill "$agent_bus_pid" 2>/dev/null || true' EXIT INT TERM
+
+# Deterministic zero-model disk watchdog on the EXISTING 5GB OpenClaw volume.
+# Default read-only; pruning needs the explicit NEO_SAFE_RETENTION_APPLY=1 flag
+# AND a per-file disposable manifest, age, regular-file and path proofs.
+neo_volume_root="${OPENCLAW_STATE_DIR:-/home/node/.openclaw}"
+neo_volume_guard_apply=""
+if [ "${NEO_SAFE_RETENTION_APPLY:-0}" = "1" ]; then
+  neo_volume_guard_apply="--apply"
+fi
+node scripts/neo-volume-guardian.mjs --root "$neo_volume_root" --watch $neo_volume_guard_apply &
+neo_volume_guard_pid=$!
+trap 'kill "$agent_bus_pid" "$neo_volume_guard_pid" 2>/dev/null || true' EXIT INT TERM
 
 node openclaw.mjs gateway --allow-unconfigured --bind lan --port 8080
