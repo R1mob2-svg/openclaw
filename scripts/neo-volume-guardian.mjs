@@ -21,7 +21,7 @@ const WATCH_MS = 15 * 60 * 1000;
 // A directory being named "tmp" never makes its contents disposable.
 // Only owner-scoped cache/triage/ROTATED logs here can be pruned.
 const POLICIES = Object.freeze([
-  { relative: "logs/rotated", days: 14, file: /^(?:neo|openclaw|geminx)[\w.-]*\.log\.(?:[1-9]\d*|gz)$/i },
+  { relative: "logs/rotated", days: 14, file: /^(?:neo|openclaw|geminx)[\w.-]*?(?:\.[1-9]\d*\.log|\.log\.(?:[1-9]\d*|gz))$/i },
   { relative: "cache/neo-ephemeral", days: 7, file: /^[\w.-]+\.(?:cache|tmp)$/i },
   { relative: "tmp/neo-triage", days: 7, file: /^[\w.-]+\.(?:tmp|log|log\.gz)$/i },
   { relative: "tmp/neo-preview-builds", days: 7, file: /^[\w.-]+\.(?:tmp|cache)$/i },
@@ -46,7 +46,7 @@ function canonicalRoot(root) {
 function duBytes(root) {
   // statfs on Railway can report the host filesystem rather than the
   // per-volume quota. du measures actual allocated file blocks in this mount.
-  const output = execFileSync("du", ["-sk", "--", root], {
+  const output = execFileSync("du", ["-x", "-sk", "--", root], {
     encoding: "utf8", timeout: 30_000, maxBuffer: 1024 * 128
   }).trim();
   const match = /^(\d+)\s/.exec(output);
@@ -79,6 +79,9 @@ function candidateFiles(root, nowMs, rootDev) {
     let dirStat;
     try { dirStat = fs.lstatSync(dir); } catch { continue; }
     if (!dirStat.isDirectory() || dirStat.isSymbolicLink() || dirStat.dev !== rootDev) continue;
+    // Ancestor symlinks (e.g. logs -> /external) are also forbidden.
+    const actualDir = fs.realpathSync(dir);
+    if (!actualDir.startsWith(root + path.sep)) continue;
     const walk = (folder, depth) => {
       if (depth > MAX_DEPTH || discovered.length >= MAX_CANDIDATES) return;
       for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
