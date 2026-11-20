@@ -71,6 +71,25 @@ export function requireArtifactHeadroom(root, expectedBytes, limits = {}) {
   }
   return snapshot;
 }
+// Non-log scratch/cache candidates are only safe when the producing worker
+// has explicitly marked them completed, non-recoverable and externally saved.
+// Age alone is NOT evidence an unpushed source/artifact can be deleted.
+function hasDisposableProof(root, candidate, policy) {
+  if (policy === "logs/rotated") return true;
+  const markerPath = candidate + ".disposable.json";
+  try {
+    const st = fs.lstatSync(markerPath);
+    if (!st.isFile() || st.isSymbolicLink() || st.nlink !== 1 || st.size > 2048) return false;
+    const marker = JSON.parse(fs.readFileSync(markerPath, "utf8"));
+    return marker?.schema === "runtime-disposable.v1" &&
+      marker?.file === path.relative(root, candidate) &&
+      marker?.completed === true && marker?.externallySaved === true &&
+      marker?.safeToPrune === true;
+  } catch {
+    return false;
+  }
+}
+
 function candidateFiles(root, nowMs, rootDev) {
   const discovered = [];
   for (const policy of POLICIES) {
@@ -97,7 +116,8 @@ function candidateFiles(root, nowMs, rootDev) {
           continue;
         }
         if (!st.isFile() || st.nlink !== 1 || !policy.file.test(entry.name) ||
-            BLOCKED_NAMES.test(entry.name)) continue;
+            BLOCKED_NAMES.test(entry.name) ||
+            !hasDisposableProof(root, file, policy.relative)) continue;
         // ctime catches newly moved/touched files whose original mtime is old;
         // preserve recent access too. Nothing touched within the last 7/14d.
         const cutoff = nowMs - policy.days * 86400_000;
@@ -124,6 +144,12 @@ export function retentionSweep(root, { apply = false, nowMs = Date.now(), capaci
     if (apply) {
       try {
         const latest = fs.lstatSync(c.file);
+        // Recheck external-save proof immediately before unlink.
+        if (!hasDisposableProof(snapshot.root, c.file, c.policy)) {
+          row.action = "SKIPPED_UNPROVEN";
+          files.push(row);
+          continue;
+        }
         if (!latest.isFile() || latest.isSymbolicLink() || latest.nlink !== 1 ||
             latest.dev !== c.dev || latest.ino !== c.ino ||
             latest.size !== c.size || latest.mtimeMs !== c.mtimeMs ||
