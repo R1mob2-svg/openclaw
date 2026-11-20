@@ -20,6 +20,20 @@ function textContent(
 }
 
 describe("read tool", () => {
+  it("rejects empty or whitespace-only source instead of silently claiming a read", async () => {
+    for (const buffer of ["", "   \n\t"]) {
+      const tool = createReadToolDefinition("/workspace", {
+        operations: {
+          access: async () => {},
+          detectImageMimeType: async () => null,
+          readFile: async () => Buffer.from(buffer),
+        },
+      });
+      await expect(tool.execute("call-blank", { path: "blank.txt" }))
+        .rejects.toThrow(/READ_EMPTY_OUTPUT/);
+    }
+  });
+
   it("reads managed inbound media refs as image files", async () => {
     const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-read-media-"));
     const mediaId = `read-tool-${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
