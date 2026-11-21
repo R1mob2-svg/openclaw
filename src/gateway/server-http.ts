@@ -213,6 +213,10 @@ function isOpenAiChatCompletionsPath(pathname: string): boolean {
   return pathname === "/v1/chat/completions";
 }
 
+function isOpenAiJobStatusPath(pathname: string): boolean {
+  return /^\/(?:v1\/)?jobs\/[^/]+$/.test(pathname);
+}
+
 function isOpenResponsesPath(pathname: string): boolean {
   return pathname === "/v1/responses";
 }
@@ -678,7 +682,10 @@ export function createGatewayHttpServer(opts: {
             }),
         });
       }
-      if (openAiChatCompletionsEnabled && isOpenAiChatCompletionsPath(scopedRequestPath)) {
+      if (
+        openAiChatCompletionsEnabled &&
+        (isOpenAiChatCompletionsPath(scopedRequestPath) || isOpenAiJobStatusPath(scopedRequestPath))
+      ) {
         requestStages.push({
           name: "openai",
           run: async () =>

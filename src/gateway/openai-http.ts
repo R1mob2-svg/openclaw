@@ -8,6 +8,7 @@ import {
   normalizeLowercaseStringOrEmpty,
   normalizeOptionalString,
 } from "@openclaw/normalization-core/string-coerce";
+import { createActivityEmitter } from "../../bin/neo-activity-emit.mjs";
 import { isClientToolNameConflictError } from "../agents/agent-tool-definition-adapter.js";
 import type { AgentStreamParams, ClientToolDefinition } from "../agents/command/shared-types.js";
 import type { ImageContent } from "../agents/command/types.js";
@@ -21,7 +22,6 @@ import {
 } from "../agents/usage.js";
 import { createDefaultDeps } from "../cli/deps.js";
 import { agentCommandFromIngress } from "../commands/agent.js";
-import { createActivityEmitter } from "../../bin/neo-activity-emit.mjs";
 import type { GatewayHttpChatCompletionsConfig } from "../config/types.gateway.js";
 import { emitAgentEvent, onAgentEvent } from "../infra/agent-events.js";
 import { logWarn } from "../logger.js";
@@ -35,8 +35,8 @@ import {
   type InputImageLimits,
   type InputImageSource,
 } from "../media/input-files.js";
-import { defaultRuntime } from "../runtime.js";
 import { readMediaBuffer } from "../media/store.js";
+import { defaultRuntime } from "../runtime.js";
 import { resolveAssistantStreamDeltaText } from "./agent-event-assistant-text.js";
 import {
   buildAgentMessageFromConversationEntries,
@@ -53,6 +53,7 @@ import {
   writeDone,
 } from "./http-common.js";
 import { handleGatewayPostJsonEndpoint } from "./http-endpoint-helpers.js";
+import { authorizeGatewayHttpRequestOrReply } from "./http-utils.js";
 import {
   authorizeOpenAiCompatibleHttpModelOverride,
   isGatewaySessionKeyOverrideError,
@@ -625,7 +626,6 @@ async function resolveImagesForRequest(
   return images;
 }
 
-
 type GeminXNeoReceiptContext = {
   objectiveId: string;
   taskId: string;
@@ -683,15 +683,22 @@ function resolveGeminXNeoReceiptContext(req: IncomingMessage): GeminXNeoReceiptC
     requireImageArtifact: singleHeader(req, "x-geminx-require-image-artifact") === "1",
   };
   const idPattern = /^[a-zA-Z0-9_.:-]{1,160}$/;
-  if (!idPattern.test(context.objectiveId) || !idPattern.test(context.taskId) ||
-      !idPattern.test(context.attemptId) || !/^[a-f0-9]{64}$/i.test(context.leaseFingerprint)) {
+  if (
+    !idPattern.test(context.objectiveId) ||
+    !idPattern.test(context.taskId) ||
+    !idPattern.test(context.attemptId) ||
+    !/^[a-f0-9]{64}$/i.test(context.leaseFingerprint)
+  ) {
     throw new Error("invalid GeminX NEO receipt context");
   }
   return context;
 }
 
 function identity(value: unknown, fallback: string): string {
-  const raw = String(value ?? "").trim().replace(/[^a-zA-Z0-9_.:-]/g, "_").slice(0, 160);
+  const raw = String(value ?? "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_.:-]/g, "_")
+    .slice(0, 160);
   return raw || fallback;
 }
 
@@ -708,13 +715,22 @@ async function buildGeminXNeoReceiptBundle(params: {
   result: unknown;
   events: GeminXNeoReceiptEvent[];
   readMediaBufferFn?: typeof readMediaBuffer;
-}): Promise<{ worker_receipt: Record<string, unknown>; worker_artifacts_inline: Record<string, unknown>[] } | null> {
+}): Promise<{
+  worker_receipt: Record<string, unknown>;
+  worker_artifacts_inline: Record<string, unknown>[];
+} | null> {
   const secret = process.env.GEMINX_NEO_WORKER_RECEIPT_HMAC_SECRET ?? "";
-  const sourceCommit =
-    (process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.OPENCLAW_SOURCE_COMMIT_SHA ?? "").trim();
+  const sourceCommit = (
+    process.env.RAILWAY_GIT_COMMIT_SHA ??
+    process.env.OPENCLAW_SOURCE_COMMIT_SHA ??
+    ""
+  ).trim();
   const brainCommit = (process.env.OPENCLAW_NEO_BRAIN_SHA ?? "").trim();
-  if (secret.length < 32 || !/^[a-f0-9]{40}$/i.test(sourceCommit) ||
-      !/^[a-f0-9]{40}$/i.test(brainCommit)) {
+  if (
+    secret.length < 32 ||
+    !/^[a-f0-9]{40}$/i.test(sourceCommit) ||
+    !/^[a-f0-9]{40}$/i.test(brainCommit)
+  ) {
     return null;
   }
 
@@ -740,7 +756,9 @@ async function buildGeminXNeoReceiptBundle(params: {
       tool_call_id: toolId,
       tool: identity(event.data.name ?? event.data.title ?? event.stream, "openclaw_tool"),
       status: "succeeded",
-      result_sha256: sha256(JSON.stringify({ stream: event.stream, data: event.data, ts: event.ts })),
+      result_sha256: sha256(
+        JSON.stringify({ stream: event.stream, data: event.data, ts: event.ts }),
+      ),
     });
   }
 
@@ -749,23 +767,30 @@ async function buildGeminXNeoReceiptBundle(params: {
   }
 
   const workerArtifacts: Array<{ sha256: string; size_bytes: number; content_type: string }> = [];
-  const inlineArtifacts: Array<{ sha256: string; content_type: string; content_base64: string }> = [];
+  const inlineArtifacts: Array<{ sha256: string; content_type: string; content_base64: string }> =
+    [];
   const imageIds = new Set<string>();
 
   for (const event of params.events) {
-    if (event.stream !== "tool" ||
-        String(event.data.phase ?? "").toLowerCase() !== "result" ||
-        String(event.data.name ?? "") !== "image_generate" ||
-        event.data.isError === true) {
+    if (
+      event.stream !== "tool" ||
+      String(event.data.phase ?? "").toLowerCase() !== "result" ||
+      String(event.data.name ?? "") !== "image_generate" ||
+      event.data.isError === true
+    ) {
       continue;
     }
     const resultRecord =
-      event.data.result && typeof event.data.result === "object" && !Array.isArray(event.data.result)
-        ? event.data.result as Record<string, unknown>
+      event.data.result &&
+      typeof event.data.result === "object" &&
+      !Array.isArray(event.data.result)
+        ? (event.data.result as Record<string, unknown>)
         : {};
     const details =
-      resultRecord.details && typeof resultRecord.details === "object" && !Array.isArray(resultRecord.details)
-        ? resultRecord.details as Record<string, unknown>
+      resultRecord.details &&
+      typeof resultRecord.details === "object" &&
+      !Array.isArray(resultRecord.details)
+        ? (resultRecord.details as Record<string, unknown>)
         : {};
     const rawAttachments = Array.isArray(details.attachments) ? details.attachments : [];
     for (const entry of rawAttachments) {
@@ -806,7 +831,8 @@ async function buildGeminXNeoReceiptBundle(params: {
     source_commit_sha: sourceCommit,
     brain_commit_sha: brainCommit,
     tool_receipts: toolReceipts,
-    image_artifact_sha256: workerArtifacts.find((item) => item.content_type.startsWith("image/"))?.sha256 ?? null,
+    image_artifact_sha256:
+      workerArtifacts.find((item) => item.content_type.startsWith("image/"))?.sha256 ?? null,
     final_text_sha256: sha256(params.content),
     completed_at: new Date().toISOString(),
   };
@@ -843,10 +869,19 @@ async function buildGeminXNeoReceiptBundle(params: {
     completed_at: completedAt,
   };
   const signingPayload = JSON.stringify([
-    unsigned.schema_version, unsigned.worker_runtime_id, unsigned.worker_id, unsigned.company_scope,
-    unsigned.objective_id, unsigned.task_id, unsigned.lease_fingerprint, unsigned.attempt_id,
-    unsigned.source_commit_sha, unsigned.brain_commit_sha, unsigned.tool_receipts,
-    unsigned.artifacts, unsigned.completed_at,
+    unsigned.schema_version,
+    unsigned.worker_runtime_id,
+    unsigned.worker_id,
+    unsigned.company_scope,
+    unsigned.objective_id,
+    unsigned.task_id,
+    unsigned.lease_fingerprint,
+    unsigned.attempt_id,
+    unsigned.source_commit_sha,
+    unsigned.brain_commit_sha,
+    unsigned.tool_receipts,
+    unsigned.artifacts,
+    unsigned.completed_at,
   ]);
   const workerSignature = createHmac("sha256", secret).update(signingPayload).digest("hex");
 
@@ -1180,11 +1215,74 @@ function resolveErrorMessage(err: unknown): string {
   return String(err);
 }
 
+const GATEWAY_BOOT_ID = randomUUID();
+
+interface OpenClawJobFlight {
+  jobId: string;
+  runId: string;
+  status: "running" | "completed" | "failed";
+  createdAt: string;
+  updatedAt: string;
+  bootId: string;
+  result?: Record<string, unknown>;
+  error?: Record<string, unknown>;
+}
+
+const OPENCLAW_JOB_FLIGHTS = new Map<string, OpenClawJobFlight>();
+
+function recordJobFlight(entry: OpenClawJobFlight) {
+  OPENCLAW_JOB_FLIGHTS.set(entry.jobId, entry);
+  if (OPENCLAW_JOB_FLIGHTS.size > 500) {
+    const oldest = OPENCLAW_JOB_FLIGHTS.keys().next().value;
+    if (oldest) OPENCLAW_JOB_FLIGHTS.delete(oldest);
+  }
+}
+
+function updateJobFlight(
+  jobId: string | undefined,
+  status: OpenClawJobFlight["status"],
+  extra: { runId: string; result?: Record<string, unknown>; error?: Record<string, unknown> },
+) {
+  if (!jobId) return;
+  recordJobFlight({
+    jobId,
+    runId: extra.runId,
+    status,
+    createdAt: OPENCLAW_JOB_FLIGHTS.get(jobId)?.createdAt ?? new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    bootId: GATEWAY_BOOT_ID,
+    ...(extra.result !== undefined ? { result: extra.result } : {}),
+    ...(extra.error !== undefined ? { error: extra.error } : {}),
+  });
+}
+
 export async function handleOpenAiHttpRequest(
   req: IncomingMessage,
   res: ServerResponse,
   opts: OpenAiHttpOptions,
 ): Promise<boolean> {
+  const reqUrl = new URL(req.url ?? "/", "http://localhost");
+  const jobMatch = reqUrl.pathname.match(/^\/(?:v1\/)?jobs\/([^/]+)$/);
+  if (jobMatch && req.method === "GET") {
+    const requestAuth = await authorizeGatewayHttpRequestOrReply({
+      req,
+      res,
+      auth: opts.auth,
+      trustedProxies: opts.trustedProxies,
+      allowRealIpFallback: opts.allowRealIpFallback,
+      rateLimiter: opts.rateLimiter,
+    });
+    if (!requestAuth) return true;
+    const jobId = decodeURIComponent(jobMatch[1] ?? "").trim();
+    const record = OPENCLAW_JOB_FLIGHTS.get(jobId);
+    if (!record) {
+      sendJson(res, 404, { error: "JOB_NOT_FOUND", job_id: jobId, boot_id: GATEWAY_BOOT_ID });
+      return true;
+    }
+    sendJson(res, 200, { ...record });
+    return true;
+  }
+
   const limits = resolveOpenAiChatCompletionsLimits(opts.config);
   const handled = await handleGatewayPostJsonEndpoint(req, res, {
     pathname: "/v1/chat/completions",
@@ -1365,18 +1463,73 @@ export async function handleOpenAiHttpRequest(
   }
 
   const runId = `chatcmpl_${randomUUID()}`;
+  const headerJobId = singleHeader(req, "x-geminx-job-id") || singleHeader(req, "idempotency-key");
+  if (headerJobId) {
+    const existing = OPENCLAW_JOB_FLIGHTS.get(headerJobId);
+    if (existing) {
+      if (existing.status === "completed" && existing.result) {
+        if (stream) {
+          setSseHeaders(res);
+          const choices = Array.isArray(existing.result.choices)
+            ? (existing.result.choices as Array<{ message?: { content?: string } }>)
+            : [];
+          const existingContent = String(choices[0]?.message?.content ?? "");
+          writeSse(res, {
+            id: existing.runId,
+            object: "chat.completion.chunk",
+            created: Math.floor(Date.now() / 1000),
+            model,
+            choices: [
+              {
+                index: 0,
+                delta: { role: "assistant", content: existingContent },
+                finish_reason: "stop",
+              },
+            ],
+            ...(existing.result.worker_receipt
+              ? { worker_receipt: existing.result.worker_receipt }
+              : {}),
+            ...(existing.result.worker_blocked_code
+              ? { worker_blocked_code: existing.result.worker_blocked_code }
+              : {}),
+            ...(existing.result.usage ? { usage: existing.result.usage } : {}),
+          });
+          writeDone(res);
+          res.end();
+          return true;
+        }
+        sendJson(res, 200, existing.result);
+        return true;
+      }
+      if (existing.status === "running") {
+        sendJson(res, 409, {
+          error: {
+            message: "Duplicate request rejected: job is already running on OpenClaw.",
+            type: "conflict_error",
+            code: "JOB_ALREADY_RUNNING",
+            job_id: headerJobId,
+            run_id: existing.runId,
+            boot_id: existing.bootId,
+          },
+        });
+        return true;
+      }
+    }
+    recordJobFlight({
+      jobId: headerJobId,
+      runId,
+      status: "running",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      bootId: GATEWAY_BOOT_ID,
+    });
+  }
   let neoReceiptContext: GeminXNeoReceiptContext | null = null;
   try {
     neoReceiptContext = resolveGeminXNeoReceiptContext(req);
   } catch (err) {
     sendJson(res, 400, {
       error: { message: resolveErrorMessage(err), type: "invalid_request_error" },
-    });
-    return true;
-  }
-  if (neoReceiptContext && stream) {
-    sendJson(res, 400, {
-      error: { message: "GeminX NEO worker receipts require stream=false", type: "invalid_request_error" },
     });
     return true;
   }
@@ -1475,27 +1628,34 @@ export async function handleOpenAiHttpRequest(
       object: "chat.completion",
       created: Math.floor(Date.now() / 1000),
       model,
-      choices: [{
-        index: 0,
-        message: { role: "assistant", content: "" },
-        finish_reason: "stop",
-      }],
+      choices: [
+        {
+          index: 0,
+          message: { role: "assistant", content: "" },
+          finish_reason: "stop",
+        },
+      ],
       usage,
       worker_blocked_code: code,
     });
   };
 
   if (!stream) {
-    const stopWatchingDisconnect = watchClientDisconnect(req, res, abortController);
+    let nonStreamClosed = false;
+    const socketAbortController = headerJobId ? new AbortController() : abortController;
+    const stopWatchingDisconnect = watchClientDisconnect(req, res, socketAbortController, () => {
+      nonStreamClosed = true;
+    });
     try {
       let result = await agentCommandFromIngress(commandInput, defaultRuntime, deps);
 
       if (abortController.signal.aborted) {
-        if (neoReceiptTerminalBlock) {
-          sendNeoReceiptTerminalBlock(
-            neoReceiptTerminalBlock,
-            resolveChatCompletionUsage(result),
-          );
+        updateJobFlight(headerJobId, "failed", {
+          runId,
+          error: { message: neoReceiptTerminalBlock ?? "aborted" },
+        });
+        if (!nonStreamClosed && !res.writableEnded && neoReceiptTerminalBlock) {
+          sendNeoReceiptTerminalBlock(neoReceiptTerminalBlock, resolveChatCompletionUsage(result));
         }
         return true;
       }
@@ -1589,7 +1749,7 @@ export async function handleOpenAiHttpRequest(
           })
         : null;
 
-      sendJson(res, 200, {
+      const responsePayload: Record<string, unknown> = {
         id: runId,
         object: "chat.completion",
         created: Math.floor(Date.now() / 1000),
@@ -1604,13 +1764,26 @@ export async function handleOpenAiHttpRequest(
         usage,
         ...(neoReceiptBundle ?? {}),
         ...(neoReceiptContext && !neoReceiptBundle
-          ? { worker_blocked_code: classifyGeminxNeoReceiptFailure(
-              neoReceiptEvents,
-              neoReceiptContext.requireImageArtifact,
-            ) }
+          ? {
+              worker_blocked_code: classifyGeminxNeoReceiptFailure(
+                neoReceiptEvents,
+                neoReceiptContext.requireImageArtifact,
+              ),
+            }
           : {}),
-      });
+      };
+      updateJobFlight(headerJobId, "completed", { runId, result: responsePayload });
+      if (!nonStreamClosed && !res.writableEnded) {
+        sendJson(res, 200, responsePayload);
+      }
     } catch (err) {
+      updateJobFlight(headerJobId, "failed", {
+        runId,
+        error: { message: resolveErrorMessage(err) },
+      });
+      if (nonStreamClosed || res.writableEnded) {
+        return true;
+      }
       if (abortController.signal.aborted) {
         if (neoReceiptTerminalBlock) {
           sendNeoReceiptTerminalBlock(neoReceiptTerminalBlock);
@@ -1640,6 +1813,7 @@ export async function handleOpenAiHttpRequest(
     return true;
   }
 
+  res.setHeader("x-openclaw-boot-id", GATEWAY_BOOT_ID);
   setSseHeaders(res);
 
   let wroteRole = false;
@@ -1652,6 +1826,16 @@ export async function handleOpenAiHttpRequest(
   let resultResolved = false;
   let closed = false;
   let stopWatchingDisconnect = () => {};
+  const keepaliveTimer = setInterval(() => {
+    if (!closed && !res.writableEnded) {
+      try {
+        res.write(": keepalive\n\n");
+      } catch {
+        // Ignore broken pipe; disconnect handler cleans up
+      }
+    }
+  }, 10_000);
+  if (typeof keepaliveTimer.unref === "function") keepaliveTimer.unref();
 
   const maybeFinalize = () => {
     if (closed || !finalizeRequested) {
@@ -1729,11 +1913,14 @@ export async function handleOpenAiHttpRequest(
   });
 
   const unsubscribe = () => {
+    clearInterval(keepaliveTimer);
     unsubscribeStream();
+    stopNeoReceiptCapture();
     stopProgressCapture();
   };
 
-  stopWatchingDisconnect = watchClientDisconnect(req, res, abortController, () => {
+  const streamSocketAbortController = headerJobId ? new AbortController() : abortController;
+  stopWatchingDisconnect = watchClientDisconnect(req, res, streamSocketAbortController, () => {
     closed = true;
     unsubscribe();
   });
@@ -1746,7 +1933,25 @@ export async function handleOpenAiHttpRequest(
       const result = await agentCommandFromIngress(commandInput, defaultRuntime, deps);
       resultResolved = true;
 
-      if (closed) {
+      if (abortController.signal.aborted && neoReceiptTerminalBlock) {
+        updateJobFlight(headerJobId, "completed", {
+          runId,
+          result: {
+            id: runId,
+            object: "chat.completion",
+            created: Math.floor(Date.now() / 1000),
+            model,
+            choices: [
+              {
+                index: 0,
+                message: { role: "assistant", content: bufferedAssistantContent },
+                finish_reason: "stop",
+              },
+            ],
+            usage: resolveChatCompletionUsage(result),
+            worker_blocked_code: neoReceiptTerminalBlock,
+          },
+        });
         return;
       }
 
@@ -1764,36 +1969,71 @@ export async function handleOpenAiHttpRequest(
           pendingToolCalls,
         })
       ) {
-        closed = true;
-        stopWatchingDisconnect();
-        unsubscribe();
-        writeSse(res, {
+        updateJobFlight(headerJobId, "failed", {
+          runId,
           error: {
             message: resolveUnsatisfiedToolChoiceMessage(toolChoiceConstraint),
             type: "api_error",
           },
         });
-        writeDone(res);
-        res.end();
+        if (!closed) {
+          closed = true;
+          stopWatchingDisconnect();
+          unsubscribe();
+          writeSse(res, {
+            error: {
+              message: resolveUnsatisfiedToolChoiceMessage(toolChoiceConstraint),
+              type: "api_error",
+            },
+          });
+          writeDone(res);
+          res.end();
+        }
         return;
       }
 
       if (stopReason === "tool_calls" && pendingToolCalls && pendingToolCalls.length > 0) {
+        const commentary = bufferedAssistantContent || resolveAgentResponseCommentary(result);
+        updateJobFlight(headerJobId, "completed", {
+          runId,
+          result: {
+            id: runId,
+            object: "chat.completion",
+            created: Math.floor(Date.now() / 1000),
+            model,
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: "assistant",
+                  content: commentary,
+                  tool_calls: pendingToolCalls.map((call) => ({
+                    id: call.id,
+                    type: "function",
+                    function: { name: call.name, arguments: call.arguments },
+                  })),
+                },
+                finish_reason: "tool_calls",
+              },
+            ],
+            usage: finalUsage,
+          },
+        });
+        if (closed) {
+          return;
+        }
         if (!wroteRole) {
           wroteRole = true;
           writeAssistantRoleChunk(res, { runId, model });
         }
-        if (!sawAssistantDelta) {
-          const commentary = bufferedAssistantContent || resolveAgentResponseCommentary(result);
-          if (commentary) {
-            sawAssistantDelta = true;
-            writeAssistantContentChunk(res, {
-              runId,
-              model,
-              content: commentary,
-              finishReason: null,
-            });
-          }
+        if (!sawAssistantDelta && commentary) {
+          sawAssistantDelta = true;
+          writeAssistantContentChunk(res, {
+            runId,
+            model,
+            content: commentary,
+            finishReason: null,
+          });
         }
         writeAssistantToolCallsIncrementalChunks(res, {
           runId,
@@ -1804,25 +2044,79 @@ export async function handleOpenAiHttpRequest(
         return;
       }
 
+      const resolvedContent = resolveAgentResponseText(result);
+      const streamNeoReceiptBundle = neoReceiptContext
+        ? await buildGeminXNeoReceiptBundle({
+            context: neoReceiptContext,
+            runId,
+            sessionKey,
+            model,
+            content: resolvedContent || bufferedAssistantContent,
+            result,
+            events: neoReceiptEvents,
+          })
+        : null;
+      const streamBlockedCode =
+        neoReceiptContext && !streamNeoReceiptBundle
+          ? classifyGeminxNeoReceiptFailure(
+              neoReceiptEvents,
+              neoReceiptContext.requireImageArtifact,
+            )
+          : undefined;
+      updateJobFlight(headerJobId, "completed", {
+        runId,
+        result: {
+          id: runId,
+          object: "chat.completion",
+          created: Math.floor(Date.now() / 1000),
+          model,
+          choices: [
+            {
+              index: 0,
+              message: { role: "assistant", content: resolvedContent || bufferedAssistantContent },
+              finish_reason: "stop",
+            },
+          ],
+          usage: finalUsage,
+          ...(streamNeoReceiptBundle ?? {}),
+          ...(streamBlockedCode ? { worker_blocked_code: streamBlockedCode } : {}),
+        },
+      });
+      if (closed) {
+        return;
+      }
       if (!sawAssistantDelta) {
         if (!wroteRole) {
           wroteRole = true;
           writeAssistantRoleChunk(res, { runId, model });
         }
 
-        const content = resolveAgentResponseText(result);
-
         sawAssistantDelta = true;
         writeAssistantContentChunk(res, {
           runId,
           model,
-          content,
+          content: resolvedContent,
           finishReason: null,
+        });
+      }
+      if (streamNeoReceiptBundle || streamBlockedCode) {
+        writeSse(res, {
+          id: runId,
+          object: "chat.completion.chunk",
+          created: Math.floor(Date.now() / 1000),
+          model,
+          choices: [{ index: 0, delta: {}, finish_reason: null }],
+          ...(streamNeoReceiptBundle ?? {}),
+          ...(streamBlockedCode ? { worker_blocked_code: streamBlockedCode } : {}),
         });
       }
       requestFinalize();
     } catch (err) {
       resultResolved = true;
+      updateJobFlight(headerJobId, "failed", {
+        runId,
+        error: { message: resolveErrorMessage(err) },
+      });
       if (closed || abortController.signal.aborted) {
         return;
       }

@@ -2668,3 +2668,164 @@ describe("OpenAI-compatible HTTP API (e2e)", () => {
     },
   );
 });
+
+describe("OpenClaw durable job flight deduplication and SSE keepalive", () => {
+  it("allows stream: true with x-geminx-neo-receipt=1 and records completed job flight", async () => {
+    agentCommand.mockClear();
+    agentCommand.mockResolvedValueOnce({
+      payloads: [{ text: "Verified streamed receipt reply" }],
+      meta: { agentMeta: { usage: { input: 10, output: 5 } } },
+    } as never);
+
+    const jobId = `job-stream-neo-${Date.now()}`;
+    const res = await postChatCompletions(
+      enabledPort,
+      {
+        stream: true,
+        model: "openclaw/default",
+        messages: [{ role: "user", content: "verify neo receipt stream" }],
+      },
+      {
+        "x-geminx-job-id": jobId,
+        "idempotency-key": jobId,
+        "x-geminx-neo-receipt": "1",
+        "x-geminx-objective-id": "obj-1",
+        "x-geminx-task-id": "task-1",
+        "x-geminx-attempt-id": "attempt-1",
+        "x-geminx-lease-fingerprint": "a".repeat(64),
+      },
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/event-stream");
+    const bodyText = await res.text();
+    expect(bodyText).toContain("Verified streamed receipt reply");
+    expect(bodyText).toContain("data: [DONE]");
+
+    const statusRes = await fetch(
+      `http://127.0.0.1:${enabledPort}/v1/jobs/${encodeURIComponent(jobId)}`,
+    );
+    expect(statusRes.status).toBe(200);
+    const statusJson = (await statusRes.json()) as {
+      status: string;
+      bootId?: string;
+      result?: { choices?: Array<{ message?: { content?: string } }> };
+    };
+    expect(statusJson.status).toBe("completed");
+    expect(statusJson.bootId).toBeTruthy();
+    expect(statusJson.result?.choices?.[0]?.message?.content).toBe(
+      "Verified streamed receipt reply",
+    );
+  });
+
+  it("rejects duplicate in-flight x-geminx-job-id with 409 and returns cached result once completed", async () => {
+    let releaseRun!: () => void;
+    agentCommand.mockClear();
+    agentCommand.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseRun = () =>
+            resolve({
+              payloads: [{ text: "Single execution result" }],
+              meta: { agentMeta: { usage: { input: 4, output: 3 } } },
+            } as never);
+        }),
+    );
+
+    const jobId = `job-dedupe-${Date.now()}`;
+    const firstReq = postChatCompletions(
+      enabledPort,
+      { model: "openclaw/default", messages: [{ role: "user", content: "run once" }] },
+      { "x-geminx-job-id": jobId, "idempotency-key": jobId },
+    );
+
+    await vi.waitFor(() => {
+      expect(agentCommand).toHaveBeenCalledTimes(1);
+    });
+
+    const dupRes = await postChatCompletions(
+      enabledPort,
+      { model: "openclaw/default", messages: [{ role: "user", content: "run once" }] },
+      { "x-geminx-job-id": jobId, "idempotency-key": jobId },
+    );
+    expect(dupRes.status).toBe(409);
+    const dupJson = (await dupRes.json()) as { error?: { code?: string } };
+    expect(dupJson.error?.code).toBe("JOB_ALREADY_RUNNING");
+
+    releaseRun();
+    const firstRes = await firstReq;
+    expect(firstRes.status).toBe(200);
+
+    const replayRes = await postChatCompletions(
+      enabledPort,
+      { model: "openclaw/default", messages: [{ role: "user", content: "run once" }] },
+      { "x-geminx-job-id": jobId, "idempotency-key": jobId },
+    );
+    expect(replayRes.status).toBe(200);
+    const replayJson = (await replayRes.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    expect(replayJson.choices?.[0]?.message?.content).toBe("Single execution result");
+    expect(agentCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps durable x-geminx-job-id stream job running on proxy disconnect and records completion", async () => {
+    let serverAbortSignal: AbortSignal | undefined;
+    let releaseRun!: () => void;
+    agentCommand.mockClear();
+    agentCommand.mockImplementationOnce(
+      (opts: unknown) =>
+        new Promise((resolve) => {
+          serverAbortSignal = (opts as { abortSignal?: AbortSignal } | undefined)?.abortSignal;
+          releaseRun = () =>
+            resolve({
+              payloads: [{ text: "Survived edge disconnect" }],
+              meta: { agentMeta: { usage: { input: 6, output: 4 } } },
+            } as never);
+        }),
+    );
+
+    const jobId = `job-disconnect-${Date.now()}`;
+    const clientReq = http.request({
+      hostname: "127.0.0.1",
+      port: enabledPort,
+      path: "/v1/chat/completions",
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-openclaw-scopes": "operator.write",
+        "x-geminx-job-id": jobId,
+      },
+    });
+    clientReq.on("error", () => {});
+    clientReq.end(
+      JSON.stringify({
+        stream: true,
+        model: "openclaw/default",
+        messages: [{ role: "user", content: "long task" }],
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(agentCommand).toHaveBeenCalledTimes(1);
+    });
+
+    clientReq.destroy();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(serverAbortSignal?.aborted).toBe(false);
+
+    releaseRun();
+    await vi.waitFor(async () => {
+      const statusRes = await fetch(
+        `http://127.0.0.1:${enabledPort}/v1/jobs/${encodeURIComponent(jobId)}`,
+      );
+      expect(statusRes.status).toBe(200);
+      const statusJson = (await statusRes.json()) as {
+        status: string;
+        result?: { choices?: Array<{ message?: { content?: string } }> };
+      };
+      expect(statusJson.status).toBe("completed");
+      expect(statusJson.result?.choices?.[0]?.message?.content).toBe("Survived edge disconnect");
+    });
+  });
+});
