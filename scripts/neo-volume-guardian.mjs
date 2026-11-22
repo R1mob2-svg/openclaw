@@ -173,6 +173,53 @@ export function topLevelUsage(root, limit = 8) {
   } catch { return []; }
 }
 
+/**
+ * Read-only nested space inventory. Only immediate directory names and allocated
+ * byte counts, never file contents, tokens or full user paths. This is
+ * deliberately NOT an automatic deletion policy: workspace subtrees can
+ * include live source and unsaved job state even when a GitHub Brain exists.
+ */
+export function pressureSubtreeInventory(root, { parents = ["workspace-neo", "workspace", "agents"], limit = 12 } = {}) {
+  const canonical = canonicalRoot(root);
+  const rootDev = fs.lstatSync(canonical).dev;
+  const result = [];
+  for (const parent of parents) {
+    if (typeof parent !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(parent)) continue;
+    const base = path.join(canonical, parent);
+    let bs;
+    try { bs=fs.lstatSync(base); } catch { continue; }
+    if (!bs.isDirectory() || bs.isSymbolicLink() || bs.dev !== rootDev) continue;
+    const children = fs.readdirSync(base, { withFileTypes: true })
+      .filter(e => !e.isSymbolicLink() && e.isDirectory())
+      .slice(0, 100)
+      .map(e => ({ path: path.join(base,e.name), name: e.name }))
+      .filter(e => {
+        try { const st=fs.lstatSync(e.path);return st.isDirectory() && st.dev===rootDev && !st.isSymbolicLink(); }
+        catch { return false; }
+      });
+    const rows=[];
+    if (children.length) {
+      try {
+        const output=execFileSync("du",["-x","-sk","--",...children.map(c=>c.path)],{
+          encoding:"utf8",timeout:45_000,maxBuffer:1024*128
+        });
+        const names=new Map(children.map(c=>[c.path,c.name]));
+        for (const line of output.split("\n")) {
+          const m=/^(\d+)\s+(.+)$/.exec(line);
+          if (m && names.has(m[2])) rows.push({directory:names.get(m[2]), usedBytes:Number(m[1])*1024});
+        }
+      } catch { /* No estimates on failed probes. */ }
+    }
+    const sum=rows.reduce((n,e)=>n+e.usedBytes,0);
+    // Large unaccounted data may be files directly in parent.
+    let allBytes=0;
+    try { allBytes=duBytes(base); } catch { /* unknown */ }
+    result.push({parent,usedBytes:allBytes,unclassifiedBytes:Math.max(0,allBytes-sum),
+      topChildren:rows.sort((a,b)=>b.usedBytes-a.usedBytes).slice(0,Math.max(0,Math.min(limit,20)))});
+  }
+  return result;
+}
+
 export function retentionSweep(root, { apply = false, nowMs = Date.now(), capacityBytes = DEFAULT_CAPACITY,
   reserveBytes = DEFAULT_RESERVE } = {}) {
   const snapshot = diskSnapshot(root, { capacityBytes, reserveBytes });
@@ -276,9 +323,17 @@ async function main() {
     }
     return;
   }
+  let pressureScanNumber = 0;
   const tick = () => {
     const result = retentionSweep(opts.root, opts);
     console.log("VOLUME_GUARD " + JSON.stringify(shortReport(result)));
+    // Once on boot and approximately hourly thereafter; no paid model, no
+    // duplicate scheduler, and no extra traversal on every 5-minute tick.
+    if (result.earlyPressure && pressureScanNumber++ % 12 === 0) {
+      console.log("VOLUME_PRESSURE_SUBTREE_INVENTORY " +
+        JSON.stringify({schema:"safe.volume.subtree-inventory.v1",
+          entries:pressureSubtreeInventory(opts.root)}));
+    }
     if (result.after &&
         result.after.freeBytes < Math.max(result.after.reserveBytes, EARLY_CLEAN_RESERVE) &&
         result.reclaimedBytes === 0) {
