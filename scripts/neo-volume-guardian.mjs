@@ -8,6 +8,7 @@
  * It only unlinks expired regular files with exact disposable extensions under
  * explicitly named, isolated housekeeping folders.
  */
+import { reclaimBrowserCaches } from "./neo-browser-cache-reclaim.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
@@ -329,14 +330,25 @@ async function main() {
     console.log("VOLUME_GUARD " + JSON.stringify(shortReport(result)));
     // Once on boot and approximately hourly thereafter; no paid model, no
     // duplicate scheduler, and no extra traversal on every 5-minute tick.
+    let duplicateBrowserReclaimedBytes = 0;
     if (result.earlyPressure && pressureScanNumber++ % 12 === 0) {
       console.log("VOLUME_PRESSURE_SUBTREE_INVENTORY " +
         JSON.stringify({schema:"safe.volume.subtree-inventory.v1",
           entries:pressureSubtreeInventory(opts.root)}));
+      // Existing watchdog owns this hourly check. No new cron or paid inference.
+      // Only 48h-stale duplicate browser versions, never ms-playwright or profiles.
+      try {
+        const caches = reclaimBrowserCaches({root:opts.root,apply:opts.apply});
+        duplicateBrowserReclaimedBytes = caches.reclaimedBytes;
+        console.log("NEO_BROWSER_CACHE_RECLAIM " + JSON.stringify(caches));
+      } catch (error) {
+        console.warn("NEO_BROWSER_CACHE_RECLAIM_BLOCKED code=" +
+          String(error?.code || error?.message || "UNKNOWN").replace(/[^A-Za-z0-9_.:-]/g,"_").slice(0,80));
+      }
     }
     if (result.after &&
         result.after.freeBytes < Math.max(result.after.reserveBytes, EARLY_CLEAN_RESERVE) &&
-        result.reclaimedBytes === 0) {
+        result.reclaimedBytes === 0 && duplicateBrowserReclaimedBytes === 0) {
       console.warn("VOLUME_GUARD_CAPACITY_ACTION_REQUIRED protected_data_preserved=true no_safe_cleanup_candidates=true");
     }
   };
