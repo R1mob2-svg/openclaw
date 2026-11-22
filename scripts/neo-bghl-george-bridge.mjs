@@ -80,7 +80,7 @@ export function createGeorgeIncidentReceiver({
     " — Railway NEO — technical-receipt\n\n"+
     "~~~\nevent: NEO_TECHNICAL_RECEIPT\nsource: Railway NEO / existing agent-message-bus\n"+
     "in_reply_to: "+event.key+"\nneo_ack_key: "+key+
-    "\nstatus: "+receipt.status+"\n"+
+    "\nstatus: RECEIVED\nreported_outcome: "+receipt.status+"\nrepair_mechanically_verified: false\n"+
     "evidence: durable_receiver_receipt="+receipt.id+
     "\nalerted_brian: false\n"+
     "resolution: receiver response recorded; independent Telegram handoff not implied\n~~~\n";
@@ -107,9 +107,11 @@ export function createGeorgeIncidentReceiver({
    for(let attempt=0;attempt<5;attempt++){
     const current=await getDoc(),time=now();
     const chunks=current.markdown.split(/(?=^### \d{4}-\d{2}-\d{2}T)/gm);
-    const already=chunks.some(x=>/^event: NEO_TECHNICAL_RECEIPT$/m.test(x)&&
-      x.includes("in_reply_to: "+event.key+"\n"));
-    if(already)return {ok:false,reason:"ALREADY_ACKNOWLEDGED"};
+    // A technical receipt is an acknowledgement, not a verified repair.
+    // Newton can take over after a BLOCKED result or an expired lease.
+    const repaired=chunks.some(x=>/^event: BGHL_REPAIR_RESOLUTION$/m.test(x)&&
+      /^status: VERIFIED$/m.test(x)&&x.includes("message_id: "+event.messageId+"\n"));
+    if(repaired)return {ok:false,reason:"REPAIR_ALREADY_VERIFIED"};
     const previous=chunks.filter(x=>/^event: BGHL_REPAIR_CLAIM$/m.test(x)&&
       x.includes("message_id: "+event.messageId+"\n"))
       .map(x=>({until:Date.parse(/^lease_until: (.+)$/m.exec(x)?.[1]||""),

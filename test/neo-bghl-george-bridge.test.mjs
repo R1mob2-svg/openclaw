@@ -50,7 +50,9 @@ test("existing NEO ingress executes once and writes a read-back-confirmed CAS re
   assert.match(text,/BGHL_REPAIR_CLAIM/);
   assert.match(text,/lease_id: lease-/);
   assert.match(text,/NEO_TECHNICAL_RECEIPT/);
-  assert.match(text,/status: COMPLETED/);
+  assert.match(text,/status: RECEIVED/);
+  assert.match(text,/reported_outcome: COMPLETED/);
+  assert.match(text,/repair_mechanically_verified: false/);
   const again=await receiver.sweep();
   assert.equal(again.attempted,0);
   assert.equal(dispatch,1);assert.equal(puts,2);
@@ -124,3 +126,11 @@ test("fresh peer lease blocks duplicate Neil repair and retains message for Newt
  }finally{rmSync(root,{recursive:true,force:true});}
 });
 
+
+test("blocked or model-reported complete acknowledgements never close the repair job",()=>{
+ const source=readFileSync(new URL("../scripts/neo-bghl-george-bridge.mjs",import.meta.url),"utf8");
+ assert.match(source,/event: BGHL_REPAIR_RESOLUTION/);
+ assert.match(source,/status: VERIFIED/);
+ assert.match(source,/repair_mechanically_verified: false/);
+ assert.doesNotMatch(source,/reason:"ALREADY_ACKNOWLEDGED"/);
+});
