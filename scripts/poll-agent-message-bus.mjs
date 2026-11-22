@@ -1,12 +1,13 @@
 import { classifyNeoBusReply } from "./neo-agent-bus-receipt-status.mjs";
 import {createGeorgeIncidentReceiver} from "./neo-bghl-george-bridge.mjs";
+import { pollFactoryQa } from "./neo-da-factory-qa-pickup.mjs";
 import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 
 const API_VERSION = "2022-11-28";
 const DEFAULT_INTERVAL_MS = 30 * 60 * 1000; // Founder: no one-minute polling.
 const DEFAULT_EXECUTION_MAX_AGE_MS = 6 * 60 * 60 * 1000;
-const DEFAULT_NEO_DISPATCH_TIMEOUT_MS = 300_000;
+const DEFAULT_NEO_DISPATCH_TIMEOUT_MS = 900_000;
 const MAX_DISPATCH_ATTEMPTS = 3;
 const EXECUTABLE_NEO_COMMANDS = new Set(["GEMINX_AUTONOMOUS_TASK_V1"]);
 const TITLE_PREFIX = "AGENT_MESSAGE_BUS:";
@@ -39,7 +40,7 @@ function executionMaxAgeMs() {
 function neoDispatchTimeoutMs() {
   const raw = Number(env("GEMINX_AGENT_BUS_NEO_DISPATCH_TIMEOUT_MS"));
   if (!Number.isFinite(raw)) return DEFAULT_NEO_DISPATCH_TIMEOUT_MS;
-  return Math.max(120_000, Math.min(300_000, Math.floor(raw)));
+  return Math.max(120_000, Math.min(930_000, Math.floor(raw)));
 }
 
 function runtimeRoot() {
@@ -473,6 +474,45 @@ async function sweep() {
       const message = error instanceof Error ? error.message : String(error);
       console.log(`[agent-message-bus] repo=${repo} error=${message.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 160)}`);
     }
+  }
+  // Same existing 30-minute bus loop: pull pending source-bound QA directly from
+  // current Brain checkpoint; invoke NEO ONLY when a genuinely new QA_REQUEST
+  // exists. No extra timer, no paid idle inference, no second queue.
+  try {
+    const result = await pollFactoryQa({
+      token,
+      onPending: async (qa) => {
+        const issue = {
+          number: Number.NaN,
+          html_url: "https://github.com/R1mob2-svg/global-agent-brain/blob/main/" + qa.requestPath,
+          created_at: new Date().toISOString()
+        };
+        const envelope = {
+          messageId: qa.messageId, correlationId: qa.taskId,
+          sender: "newton", recipient: "neo", status: "SENT",
+          priority: "P0", command: "GEMINX_AUTONOMOUS_TASK_V1",
+          project: "digital-ambush", replyTo: "R1mob2-svg/geminx-v2#1125",
+          commandPayload: {
+            command: "GEMINX_AUTONOMOUS_TASK_V1",
+            task_id: qa.taskId, prospect_id: qa.prospectId,
+            source_html_blob_sha: qa.sourceSha,
+            qa_request_brain_path: qa.requestPath,
+            qa_request_content: qa.requestText,
+            objective: "Run FREE existing Railway NEO Chromium Playwright 12-width QA on this exact published source; require left-edge layout, 200, image decode, functional navigation and email screenshot parity. Save actual ACK and QA_RESULT in existing Brain, not prose PASS. NEVER send customer email."
+          }
+        };
+        const ingested = ingestIssue("R1mob2-svg/global-agent-brain", issue, envelope);
+        if (ingested.message)
+          await dispatchNeoMessage("R1mob2-svg/global-agent-brain", issue, token, ingested.message);
+      }
+    });
+    if (result.status !== "IDLE_NO_PENDING_QA")
+      console.log("[digital-ambush-qa] status=" + result.status +
+        " pending=" + String(result.pending || 0) +
+        " message_id=" + String(result.messageId || "none"));
+  } catch (error) {
+    console.log("[digital-ambush-qa] status=READ_OR_DISPATCH_BLOCKED code=" +
+      String(error?.message || "UNKNOWN").replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0,120));
   }
   if (discovered > 0) console.log(`[agent-message-bus] sweep_queued=${discovered}`);
 }
