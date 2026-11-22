@@ -1,4 +1,5 @@
 import { classifyNeoBusReply } from "./neo-agent-bus-receipt-status.mjs";
+import {createGeorgeIncidentReceiver} from "./neo-bghl-george-bridge.mjs";
 import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 
@@ -445,6 +446,17 @@ async function sweep() {
   }
   console.log(`[agent-message-bus] auth_source=${tokenSource}`);
 
+  // Reuse the same 60-second sweep for BGHL George's code-only incidents.
+  // The first reader uses this same authenticated GitHub identity.
+  try {
+    const george=await georgeReceiver.sweep();
+    if(george?.status==="ACTIVE"&&(george.attempted||george.acked||george.failed))
+      console.log("[bghl-george-bridge] attempted="+george.attempted+
+        " acked="+george.acked+" failed="+george.failed);
+  }catch(error){
+    console.log("[bghl-george-bridge] read_unavailable reason="+
+      String(error?.message||"UNKNOWN").replace(/[^A-Za-z0-9_]/g,"_").slice(0,90));
+  }
   let discovered = 0;
   for (const repo of repos()) {
     try {
@@ -465,6 +477,7 @@ async function sweep() {
   if (discovered > 0) console.log(`[agent-message-bus] sweep_queued=${discovered}`);
 }
 
+const georgeReceiver=createGeorgeIncidentReceiver({root:()=>path.join(commsRoot(),"bghl-george")});
 let running = false;
 async function guardedSweep() {
   if (running) return;
