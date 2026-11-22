@@ -4,8 +4,8 @@
  * authenticated native NEO gateway and returns a CAS receipt to that branch.
  * No Telegram bot-to-bot messaging, new scheduler, new LLM, or owner alerts.
  */
-import {createHash} from "node:crypto";
-import {existsSync,mkdirSync,readFileSync,writeFileSync,renameSync} from "node:fs";
+import {createHash,randomUUID} from "node:crypto";
+import {existsSync,mkdirSync,readFileSync,writeFileSync,renameSync,readdirSync} from "node:fs";
 import path from "node:path";
 import {classifyNeoBusReply} from "./neo-agent-bus-receipt-status.mjs";
 const REPO="R1mob2-svg/bghl-agent-brain";
@@ -32,9 +32,10 @@ export function parseGeorgeIncidents(text,{now=Date.now(),maxAgeMs=2*60*60*1000}
   const code=/^event: ([A-Z_]+)\s*$/m.exec(chunk)?.[1];
   const trace=/^evidence: trace=([A-Za-z0-9_.:-]{8,120}); outbox=[a-f0-9]{64}\s*$/m.exec(chunk)?.[1];
   const key=/^dedupe_key: ([a-f0-9]{64})\s*$/m.exec(chunk)?.[1];
-  if(!CODES.has(code)||!trace||!REF.test(trace)||!SHA.test(key)||used.has(key))continue;
+  const messageId=/^message_id: (BGHL-TECH-[a-f0-9]{64})\s*$/m.exec(chunk)?.[1];
+  if(!CODES.has(code)||!trace||!REF.test(trace)||!SHA.test(key)||!messageId||used.has(key))continue;
   // The payload has no user-generated Markdown, free-text instructions, phone IDs or secrets.
-  output.push({code,trace,source:head[2],at:head[1],key});
+  output.push({code,trace,source:head[2],at:head[1],key,messageId});
   used.add(key);
  }
  return output.sort((a,b)=>Date.parse(a.at)-Date.parse(b.at));
@@ -53,6 +54,7 @@ export function createGeorgeIncidentReceiver({
  const tkn=()=>cfg("GH_TOKEN")||cfg("GITHUB_TOKEN")||cfg("GITHUB_PAT");
  const directory=()=>{const p=path.join(root(),"receipts");mkdirSync(p,{recursive:true,mode:0o700});return p;};
  const local=e=>path.join(directory(),"george-"+e.key+".json");
+ const maxRepairsPerDay=()=>Math.min(3,Math.max(1,Number(cfg("NEO_BGHL_REPAIR_DAILY_MAX"))||2));
  async function getDoc(){
   const token=tkn();
   if(!token)throw Error("BGHL_BRIDGE_GITHUB_TOKEN_MISSING");
@@ -98,6 +100,59 @@ export function createGeorgeIncidentReceiver({
   }
   throw Error("BGHL_BRIDGE_ACK_CAS_CONFLICT");
  }
+  // Atomic cross-agent claim. Newton must use this SAME GitHub CAS ledger,
+  // not a separate lock. Leases are deliberately longer than a model run.
+  async function claim(event){
+   const leaseId="lease-"+randomUUID(),holder="RAILWAY_NEO";
+   for(let attempt=0;attempt<5;attempt++){
+    const current=await getDoc(),time=now();
+    const chunks=current.markdown.split(/(?=^### \d{4}-\d{2}-\d{2}T)/gm);
+    const already=chunks.some(x=>/^event: NEO_TECHNICAL_RECEIPT$/m.test(x)&&
+      x.includes("in_reply_to: "+event.key+"\n"));
+    if(already)return {ok:false,reason:"ALREADY_ACKNOWLEDGED"};
+    const previous=chunks.filter(x=>/^event: BGHL_REPAIR_CLAIM$/m.test(x)&&
+      x.includes("message_id: "+event.messageId+"\n"))
+      .map(x=>({until:Date.parse(/^lease_until: (.+)$/m.exec(x)?.[1]||""),
+        holder:/^claimed_by: (.+)$/m.exec(x)?.[1]}))
+      .filter(x=>Number.isFinite(x.until)).sort((a,b)=>b.until-a.until)[0];
+    if(previous&&previous.until>time.getTime())
+      return {ok:false,reason:"EXCLUSIVE_LEASE_HELD",holder:previous.holder};
+    if(!parseGeorgeIncidents(current.markdown,{now:time.getTime()}).some(x=>
+      x.key===event.key&&x.messageId===event.messageId))
+      return {ok:false,reason:"INCIDENT_CHANGED_OR_STALE"};
+    const end=new Date(time.getTime()+15*60000).toISOString();
+    const next=current.markdown.trimEnd()+"\n\n### "+time.toISOString()+
+     " — Railway NEO — exclusive-repair-claim\n\n~~~\n"+
+     "event: BGHL_REPAIR_CLAIM\nmessage_id: "+event.messageId+
+     "\nincident_key: "+event.key+
+     "\nclaimed_by: "+holder+
+     "\nlease_id: "+leaseId+
+     "\nlease_until: "+end+
+     "\nstatus: CLAIMED\nno_customer_send: true\n~~~\n";
+    const r=await requester(ENDPOINT,{method:"PUT",headers:headers(tkn()),
+     body:JSON.stringify({branch:BRANCH,sha:current.sha,
+      content:Buffer.from(next).toString("base64"),
+      message:"bghl: NEO claim "+event.messageId}),
+     signal:AbortSignal.timeout(12000)});
+    if([409,422].includes(r.status))continue;
+    if(!r.ok)throw Error("BGHL_REPAIR_CLAIM_HTTP_"+r.status);
+    if(!(await r.json())?.commit?.sha)throw Error("BGHL_REPAIR_CLAIM_UNCONFIRMED");
+    const readback=await getDoc();
+    if(!readback.markdown.includes("lease_id: "+leaseId+"\n"))
+      throw Error("BGHL_REPAIR_CLAIM_READBACK_FAILED");
+    return {ok:true,leaseId,holder,until:end};
+   }
+   return {ok:false,reason:"EXCLUSIVE_CAS_CONFLICT"};
+  }
+  function repairsToday(){
+   const day=now().toISOString().slice(0,10);
+   return readdirSync(directory()).filter(name=>{
+     if(!/^george-[a-f0-9]{64}\.json$/.test(name))return false;
+     try{const rec=JSON.parse(readFileSync(path.join(directory(),name),"utf8"));
+       return rec?.claimed_at?.startsWith(day)&&rec?.paid_repair_dispatched===true;
+     }catch{return false;}
+   }).length;
+  }
  async function runAgent(event){
   if(typeof sendToNeo==="function")return sendToNeo(event);
   const gateway=cfg("OPENCLAW_GATEWAY_TOKEN");
@@ -139,37 +194,35 @@ export function createGeorgeIncidentReceiver({
   if(cfg("NEO_BGHL_BRIDGE_ENABLED")!=="true")return {status:"DISABLED"};
   const doc=await getDoc();
   const incidents=parseGeorgeIncidents(doc.markdown,{now:now().getTime()});
-  let attempted=0,acked=0,failed=0;
+  let attempted=0,acked=0,failed=0,skipped=0;
   for(const event of incidents){
    const file=local(event);
    let receipt=existsSync(file)?JSON.parse(readFileSync(file,"utf8")):null;
    if(!receipt){
-    if(attempted>=2)break;
-    attempted++;
-    // Local durable claim precedes any model tool call. A crash never
-    // silently executes the same external repair twice.
-    const id="bghl-neo-"+event.key.slice(0,32);
-    atomic(file,{id,status:"CLAIMED",at:now().toISOString(),event});
-    // Default is zero paid API requests. A recorded incident is durable, but
-    // no background DeepSeek (or other paid model) work is authorised.
-    // Human-approved repair is handled by the existing BGHL ChatGPT warden.
+    if(attempted>=1)break; // one genuine repair at most per 30-minute sweep
     if(cfg("NEO_BGHL_BRIDGE_PAID_INFERENCE_ENABLED")!=="true"){
-     receipt={id,event,status:"BLOCKED",
-      error:"COST_GUARD_NO_MODEL_CALL",at:now().toISOString(),ack:false};
-    }else{
-     try{
-      const response=await runAgent(event);
-      receipt={id,event,status:response?.status||"BLOCKED",
-       response:String(response?.response||"").slice(0,2800),
-       at:now().toISOString(),ack:false};
-     }catch(e){
-      receipt={id,event,status:"BLOCKED",
-       error:String(e?.message||"NEO_DISPATCH_FAILED").slice(0,110),
-       at:now().toISOString(),ack:false};
-     }
+      skipped++;continue; // no paid call, no false terminal receipt
+    }
+    if(repairsToday()>=maxRepairsPerDay()){skipped++;continue;}
+    const lease=await claim(event);
+    if(!lease.ok){skipped++;continue;}
+    attempted++;
+    const id="bghl-neo-"+event.key.slice(0,32);
+    receipt={id,event,status:"CLAIMED",claimed_at:now().toISOString(),
+      lease_id:lease.leaseId,paid_repair_dispatched:true,ack:false};
+    atomic(file,receipt);
+    try{
+     const response=await runAgent(event);
+     receipt={...receipt,status:response?.status||"BLOCKED",
+      response:String(response?.response||"").slice(0,2800),
+      finished_at:now().toISOString()};
+    }catch(e){
+     receipt={...receipt,status:"BLOCKED",
+      error:String(e?.message||"NEO_DISPATCH_FAILED").slice(0,110),
+      finished_at:now().toISOString()};
     }
     atomic(file,receipt);
-    logger("[bghl-george-bridge] action=neo_received code="+event.code+
+    logger("[bghl-george-bridge] action=neo_repair_attempt code="+event.code+
      " status="+receipt.status+" receipt="+receipt.id);
    }
    if(receipt.status==="CLAIMED"){failed++;continue;}
@@ -178,7 +231,7 @@ export function createGeorgeIncidentReceiver({
     const result=await appendAck(event,receipt);
     receipt.ack=true;receipt.ack_commit=result.commit||null;
     atomic(file,receipt);acked++;
-    logger("[bghl-george-bridge] action=ack_confirmed code="+event.code+
+    logger("[bghl-george-bridge] action=ack_confirmed message_id="+event.messageId+
      " status="+receipt.status+" receipt="+receipt.id);
    }catch(e){
     failed++;
@@ -186,7 +239,8 @@ export function createGeorgeIncidentReceiver({
      String(e?.message||"UNKNOWN").replace(/[^A-Za-z0-9_]/g,"_").slice(0,90));
    }
   }
-  return {status:"ACTIVE",seen:incidents.length,attempted,acked,failed};
+  return {status:"ACTIVE",seen:incidents.length,attempted,acked,failed,skipped};
  }
  return {sweep};
 }
+
