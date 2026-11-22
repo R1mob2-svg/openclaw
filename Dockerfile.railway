@@ -67,6 +67,8 @@ COPY . .
 RUN node --test scripts/neo-volume-guardian.test.mjs
 # Deterministic GPT factory QA handoff: no inference on idle, reject stale source hashes.
 RUN node --test scripts/neo-da-factory-qa-pickup.test.mjs
+# Fail the build if pruning touches canonical Chrome, fresh caches, profiles or agent records.
+RUN node --test scripts/neo-browser-cache-reclaim.test.mjs
 # No paid inference or network: fail build if the signed-receipt Brain
 # reference cannot be pinned to the exact canonical NEO factory doctrine.
 RUN node --test scripts/neo-verified-brain-ref.test.mjs
