@@ -112,4 +112,40 @@ describe("NEO 5GB volume guardian: fail closed and never delete live state",()=>
     assert.equal(cli.status,75);
     assert.match(cli.stderr,/GUARD_APPLY_REQUIRES_EXPLICIT_APPROVAL/);
   });
+  it("cleans up 3-day-old numbered native log rolls under early pressure, preserving active logs",()=>{
+    const root=setup();
+    const old=file(root,"logs/neo-runtime.log.1","safe retired log");
+    const live=file(root,"logs/neo-runtime.log","ACTIVE LOGGER");
+    const tooYoung=file(root,"logs/neo-runtime.log.2","recent rotated log");
+    const report=retentionSweep(root,{...limits,nowMs:Date.now()+3*86400_000,apply:true});
+    assert.equal(report.earlyPressure,true);
+    assert.ok(report.candidates.some(x=>x.path==="logs/neo-runtime.log.1"));
+    assert.equal(fs.existsSync(old),false);
+    assert.equal(fs.existsSync(live),true);
+    // Normal log policy uses 5d when the disk is healthy; at our miniature
+    // capacity, early-pressure retention is 2d, so both rolls are eligible.
+    assert.equal(fs.existsSync(tooYoung),false);
+  });
+  it("preserves the 600 MiB write guard while warning at 1.2 GiB early-cleanup threshold",()=>{
+    const root=setup();
+    const bytes=5_000_000_000;
+    const report=retentionSweep(root,{capacityBytes:bytes,reserveBytes:600*1024*1024});
+    assert.equal(report.earlyPressure,false);
+    assert.equal(report.before.reserveBytes,600*1024*1024);
+    assert.equal(report.before.pressure,false);
+    const live=file(root,"logs/neo-runtime.log.1");
+    const healthy=retentionSweep(root,{
+      capacityBytes:bytes,reserveBytes:600*1024*1024,
+      nowMs:Date.now()+3*86400_000,apply:true
+    });
+    assert.equal(healthy.earlyPressure,false);
+    assert.equal(fs.existsSync(live),true,"must retain native rolls for 5d when healthy");
+    const expired=retentionSweep(root,{
+      capacityBytes:bytes,reserveBytes:600*1024*1024,
+      nowMs:Date.now()+6*86400_000,apply:true
+    });
+    assert.equal(fs.existsSync(live),false);
+    assert.ok(expired.reclaimedBytes>0);
+  });
+
 });
