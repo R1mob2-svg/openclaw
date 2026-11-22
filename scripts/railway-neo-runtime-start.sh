@@ -12,6 +12,26 @@ esac
 # expired disposable files. Explicit emergency disable remains possible.
 # This changes no session, message, queue, ledger, receipt or uncommitted source.
 neo_volume_root="${OPENCLAW_STATE_DIR:-/home/node/.openclaw}"
+# P0 Digital Ambush QA: canonical installed Chromium only. Prevent additional
+# workspace-local Playwright and Puppeteer cache downloads on every QA run.
+# This is inherited by the EXISTING gateway, agent bus and browser workers.
+export PLAYWRIGHT_BROWSERS_PATH="$neo_volume_root/ms-playwright"
+export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+export PUPPETEER_SKIP_DOWNLOAD=1
+canonical_chromium=""
+for browser_dir in "$PLAYWRIGHT_BROWSERS_PATH"/chromium_headless_shell-* "$PLAYWRIGHT_BROWSERS_PATH"/chromium-*; do
+  [ -d "$browser_dir" ] || continue
+  for candidate in "$browser_dir/chrome-headless-shell-linux64/chrome-headless-shell" "$browser_dir/chrome-linux64/chrome" "$browser_dir/chrome-linux/chrome"; do
+    if [ -x "$candidate" ]; then canonical_chromium="$candidate"; break 2; fi
+  done
+done
+if [ -n "$canonical_chromium" ]; then
+  export CHROMIUM_PATH="$canonical_chromium"
+  export PUPPETEER_EXECUTABLE_PATH="$canonical_chromium"
+  echo "[neo-browser-cache] canonical_reuse=true duplicate_downloads_disabled=true browser_found=true"
+else
+  echo "[neo-browser-cache] browser_found=false; QA blocked, no auto-download into persistent workspace" >&2
+fi
 if [ "${NEO_SAFE_RETENTION_DISABLE:-0}" = "1" ]; then
   export NEO_SAFE_RETENTION_APPLY=0
   echo "[volume-guard] RETENTION_EMERGENCY_DISABLED=true"
