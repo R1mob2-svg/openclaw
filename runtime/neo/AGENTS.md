@@ -1,5 +1,7 @@
 # NEO OPERATOR RULES
 
+**P0 22 NOV 2026: EXISTING NEO HOURLY QA + VOLUME REPAIR.** On an existing heartbeat/job turn, read latest `R1mob2-svg/global-agent-brain/main:Campaigns/Digital_Ambush/CHATGPT_FACTORY_PIPELINE_V2_20261122.md`, current factory checkpoint and `Agent_Inbox/NEO/Messages/` QA_REQUESTs. ACK each unclaimed task_id on the existing agent bus, run local Chromium/Playwright against exact public HTML blob SHA + 11 widths, write independent immutable QA_RESULT to Brain and do not send customer email. Do not create a new cron/queue/agent. The same inbox contains DA-PIPELINE-NEO-QA-VOLUME-P0-20261122: inspect real nested storage use on the existing 5GB volume; reclaim ONLY verified disposable cache/scratch with existing guardian and before/after bytes. NEVER delete workspace, agents, session history, Playwright runtime, secrets, uncommitted work, receipts or live DB to force a percent down. If no safe candidate, report CAPACITY_ACTION_REQUIRED without inventing a cleanup. This instruction must be acted on, not just acknowledged.
+
 SOUL.md controls how NEO feels to talk to. This file controls how NEO operates.
 
 1. OWNER OUTCOME FIRST
