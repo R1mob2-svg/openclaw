@@ -18,10 +18,10 @@ describe("NEO GitHub agent bus execution bridge", () => {
     expect(script).toContain("OPENCLAW_GATEWAY_TOKEN");
   });
 
-  it("gives tool-using NEO bus objectives a bounded five-minute execution window", () => {
-    expect(script).toContain("DEFAULT_NEO_DISPATCH_TIMEOUT_MS = 300_000");
+  it("gives tool-using NEO bus objectives a bounded fifteen-minute execution window", () => {
+    expect(script).toContain("DEFAULT_NEO_DISPATCH_TIMEOUT_MS = 900_000");
     expect(script).toContain("GEMINX_AGENT_BUS_NEO_DISPATCH_TIMEOUT_MS");
-    expect(script).toContain("Math.max(120_000, Math.min(300_000");
+    expect(script).toContain("Math.max(120_000, Math.min(930_000");
     expect(script).toContain("AbortSignal.timeout(neoDispatchTimeoutMs())");
   });
 
