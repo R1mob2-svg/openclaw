@@ -14,13 +14,20 @@ import { execFileSync } from "node:child_process";
 
 const MiB = 1024 * 1024;
 const DEFAULT_CAPACITY = 5_000_000_000; // Railway 5GB nominal cap, decimal.
-const DEFAULT_RESERVE = 600 * MiB;
+// Reserve capacity before reaching Railway's hard 5 GB limit. This is a
+// preventive threshold, not a licence to delete session or customer data.
+const DEFAULT_RESERVE = 1200 * MiB;
 const MAX_DEPTH = 4;
 const MAX_CANDIDATES = 2000;
-const WATCH_MS = 15 * 60 * 1000;
+// One existing deterministic sidecar, more frequent than previously (15m).
+const WATCH_MS = 5 * 60 * 1000;
+const PRESSURE_MIN_DAYS = 2; // never prune a freshly touched/active artifact
 // A directory being named "tmp" never makes its contents disposable.
 // Only owner-scoped cache/triage/ROTATED logs here can be pruned.
 const POLICIES = Object.freeze([
+  // OpenClaw's native rotating logs live directly in logs/, not logs/rotated.
+  // NEVER touch active neo-runtime.log; only old numbered/compressed rolls.
+  { relative: "logs", days: 5, file: /^neo-runtime\.log\.[1-9]\d*(?:\.gz)?$/i },
   { relative: "logs/rotated", days: 14, file: /^(?:neo|openclaw|geminx)[\w.-]*?(?:\.[1-9]\d*\.log|\.log\.(?:[1-9]\d*|gz))$/i },
   { relative: "cache/neo-ephemeral", days: 7, file: /^[\w.-]+\.(?:cache|tmp)$/i },
   { relative: "tmp/neo-triage", days: 7, file: /^[\w.-]+\.(?:tmp|log|log\.gz)$/i },
@@ -90,7 +97,7 @@ function hasDisposableProof(root, candidate, policy) {
   }
 }
 
-function candidateFiles(root, nowMs, rootDev) {
+function candidateFiles(root, nowMs, rootDev, pressure = false) {
   const discovered = [];
   for (const policy of POLICIES) {
     const dir = path.join(root, policy.relative);
@@ -120,22 +127,59 @@ function candidateFiles(root, nowMs, rootDev) {
             !hasDisposableProof(root, file, policy.relative)) continue;
         // ctime catches newly moved/touched files whose original mtime is old;
         // preserve recent access too. Nothing touched within the last 7/14d.
-        const cutoff = nowMs - policy.days * 86400_000;
+        const retentionDays = pressure
+          ? Math.max(PRESSURE_MIN_DAYS, Math.min(policy.days, PRESSURE_MIN_DAYS))
+          : policy.days;
+        const cutoff = nowMs - retentionDays * 86400_000;
         if ([st.ctimeMs, st.mtimeMs, st.atimeMs].some(t => t >= cutoff)) continue;
         discovered.push({ file, size: st.size, dev: st.dev, ino: st.ino,
           mtimeMs: st.mtimeMs, ctimeMs: st.ctimeMs, policy: policy.relative,
-          retentionDays: policy.days });
+          retentionDays });
       }
     };
     walk(dir, 0);
   }
   return discovered;
 }
+/**
+ * Top-level sizes ONLY: no traversal paths or file content in emitted logs.
+ * Uses one bounded OS du rather than a model call, and refuses links.
+ */
+export function topLevelUsage(root, limit = 8) {
+  const canonical = canonicalRoot(root);
+  const dev = fs.lstatSync(canonical).dev;
+  const dirs = fs.readdirSync(canonical, { withFileTypes: true })
+    .filter(e => e.isDirectory() && !e.isSymbolicLink())
+    .map(e => ({ name: e.name, full: path.join(canonical, e.name) }))
+    .filter(e => {
+      try {
+        const st = fs.lstatSync(e.full);
+        return st.dev === dev && st.isDirectory() && !st.isSymbolicLink();
+      } catch { return false; }
+    })
+    .slice(0, 40);
+  if (dirs.length === 0) return [];
+  try {
+    const result = execFileSync("du", ["-x", "-sk", "--", ...dirs.map(d => d.full)], {
+      encoding: "utf8", timeout: 45_000, maxBuffer: 1024 * 128
+    });
+    const names = new Map(dirs.map(d => [d.full, d.name]));
+    return result.split("\n").flatMap(line => {
+      const match = /^(\d+)\s+(.+)$/.exec(line);
+      if (!match || !names.has(match[2])) return [];
+      return [{ directory: names.get(match[2]), usedBytes: Number(match[1]) * 1024 }];
+    }).sort((a,b) => b.usedBytes - a.usedBytes).slice(0, limit);
+  } catch { return []; }
+}
+
 export function retentionSweep(root, { apply = false, nowMs = Date.now(), capacityBytes = DEFAULT_CAPACITY,
   reserveBytes = DEFAULT_RESERVE } = {}) {
   const snapshot = diskSnapshot(root, { capacityBytes, reserveBytes });
   const rootDev = fs.lstatSync(snapshot.root).dev;
-  const candidates = candidateFiles(snapshot.root, nowMs, rootDev);
+  // Start safe cleanup earlier than the final write guard. On pressure, allow
+  // only already-verified disposable files older than 48h; never touch live
+  // sessions, ledgers, receipts, browser binaries or unpushed prospect work.
+  const candidates = candidateFiles(snapshot.root, nowMs, rootDev, snapshot.pressure);
   const files = [];
   let reclaimedBytes = 0;
   for (const c of candidates) {
@@ -171,7 +215,11 @@ export function retentionSweep(root, { apply = false, nowMs = Date.now(), capaci
     files.push(row);
   }
   return { before: snapshot, after: apply ? diskSnapshot(root, { capacityBytes, reserveBytes }) : null,
-    reclaimedBytes, candidates: files, dryRun: !apply, policies: POLICIES.map(
+    reclaimedBytes, candidates: files, dryRun: !apply,
+    // Used to target only proven disposable growth; if this dominates protected
+    // business data, the warden must request extra capacity, not erase history.
+    topConsumers: snapshot.pressure ? topLevelUsage(root) : [],
+    policies: POLICIES.map(
       ({ relative, days }) => ({ relative, retentionDays: days })) };
 }
 function cliArgs() {
@@ -198,6 +246,8 @@ function shortReport(report) {
     reserveBytes: report.before.reserveBytes, pressure: report.before.pressure,
     afterBytes: report.after?.usedBytes ?? null, afterPercent: report.after?.usedPercent ?? null,
     reclaimedBytes: report.reclaimedBytes, files: report.candidates, dryRun: report.dryRun,
+    topConsumers: report.topConsumers,
+    pressureUnresolved: Boolean(report.after?.pressure) && report.reclaimedBytes === 0,
     policies: report.policies };
 }
 async function main() {
@@ -225,6 +275,9 @@ async function main() {
   const tick = () => {
     const result = retentionSweep(opts.root, opts);
     console.log("VOLUME_GUARD " + JSON.stringify(shortReport(result)));
+    if (result.after?.pressure && result.reclaimedBytes === 0) {
+      console.warn("VOLUME_GUARD_CAPACITY_ACTION_REQUIRED protected_data_preserved=true no_safe_cleanup_candidates=true");
+    }
   };
   tick();
   if (opts.watch) {
