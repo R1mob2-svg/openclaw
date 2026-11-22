@@ -14,9 +14,10 @@ import { execFileSync } from "node:child_process";
 
 const MiB = 1024 * 1024;
 const DEFAULT_CAPACITY = 5_000_000_000; // Railway 5GB nominal cap, decimal.
-// Reserve capacity before reaching Railway's hard 5 GB limit. This is a
-// preventive threshold, not a licence to delete session or customer data.
-const DEFAULT_RESERVE = 1200 * MiB;
+// Two thresholds: early CLEANUP at 1.2GiB free; critical WRITE SAFETY
+// retains the existing 600MiB reserve. Do not reject useful work at 1.2GiB.
+const DEFAULT_RESERVE = 600 * MiB;
+const EARLY_CLEAN_RESERVE = 1200 * MiB;
 const MAX_DEPTH = 4;
 const MAX_CANDIDATES = 2000;
 // One existing deterministic sidecar, more frequent than previously (15m).
@@ -176,10 +177,10 @@ export function retentionSweep(root, { apply = false, nowMs = Date.now(), capaci
   reserveBytes = DEFAULT_RESERVE } = {}) {
   const snapshot = diskSnapshot(root, { capacityBytes, reserveBytes });
   const rootDev = fs.lstatSync(snapshot.root).dev;
-  // Start safe cleanup earlier than the final write guard. On pressure, allow
-  // only already-verified disposable files older than 48h; never touch live
-  // sessions, ledgers, receipts, browser binaries or unpushed prospect work.
-  const candidates = candidateFiles(snapshot.root, nowMs, rootDev, snapshot.pressure);
+  // The early cleanup threshold does not change preflight write admission.
+  // Only previously proven disposable files older than 48h are eligible.
+  const earlyPressure = snapshot.freeBytes < Math.max(reserveBytes, EARLY_CLEAN_RESERVE);
+  const candidates = candidateFiles(snapshot.root, nowMs, rootDev, earlyPressure);
   const files = [];
   let reclaimedBytes = 0;
   for (const c of candidates) {
@@ -218,7 +219,7 @@ export function retentionSweep(root, { apply = false, nowMs = Date.now(), capaci
     reclaimedBytes, candidates: files, dryRun: !apply,
     // Used to target only proven disposable growth; if this dominates protected
     // business data, the warden must request extra capacity, not erase history.
-    topConsumers: snapshot.pressure ? topLevelUsage(root) : [],
+    earlyPressure, topConsumers: earlyPressure ? topLevelUsage(root) : [],
     policies: POLICIES.map(
       ({ relative, days }) => ({ relative, retentionDays: days })) };
 }
@@ -247,7 +248,10 @@ function shortReport(report) {
     afterBytes: report.after?.usedBytes ?? null, afterPercent: report.after?.usedPercent ?? null,
     reclaimedBytes: report.reclaimedBytes, files: report.candidates, dryRun: report.dryRun,
     topConsumers: report.topConsumers,
-    pressureUnresolved: Boolean(report.after?.pressure) && report.reclaimedBytes === 0,
+    earlyPressure: report.earlyPressure,
+    pressureUnresolved: Boolean(report.after &&
+      report.after.freeBytes < Math.max(report.after.reserveBytes, EARLY_CLEAN_RESERVE) &&
+      report.reclaimedBytes === 0),
     policies: report.policies };
 }
 async function main() {
@@ -275,7 +279,9 @@ async function main() {
   const tick = () => {
     const result = retentionSweep(opts.root, opts);
     console.log("VOLUME_GUARD " + JSON.stringify(shortReport(result)));
-    if (result.after?.pressure && result.reclaimedBytes === 0) {
+    if (result.after &&
+        result.after.freeBytes < Math.max(result.after.reserveBytes, EARLY_CLEAN_RESERVE) &&
+        result.reclaimedBytes === 0) {
       console.warn("VOLUME_GUARD_CAPACITY_ACTION_REQUIRED protected_data_preserved=true no_safe_cleanup_candidates=true");
     }
   };
