@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { diskSnapshot, requireArtifactHeadroom, retentionSweep } from "./neo-volume-guardian.mjs";
+import { diskSnapshot, requireArtifactHeadroom, retentionSweep, londonDailyAuditDate } from "./neo-volume-guardian.mjs";
 
 const roots=[];
 function setup() {
@@ -27,6 +27,17 @@ function markDisposable(root, relative) {
 afterEach(()=>{ for(const r of roots.splice(0))fs.rmSync(r,{recursive:true,force:true}); });
 const future=Date.now()+30*86400_000;
 const limits={capacityBytes:25*1024*1024,reserveBytes:1*1024*1024};
+
+describe("NEO 3am UK maintenance uses the existing watchdog, not another scheduler",()=>{
+  it("recognises 03:00 in winter UK time and rejects 02:00",()=>{
+    assert.equal(londonDailyAuditDate(Date.parse("2026-11-22T03:15:00Z")),"2026-11-22");
+    assert.equal(londonDailyAuditDate(Date.parse("2026-11-22T02:15:00Z")),null);
+  });
+  it("recognises 03:00 British Summer Time (02:00 UTC), including DST shift",()=>{
+    assert.equal(londonDailyAuditDate(Date.parse("2026-07-01T02:15:00Z")),"2026-07-01");
+    assert.equal(londonDailyAuditDate(Date.parse("2026-07-01T03:15:00Z")),null);
+  });
+});
 
 describe("NEO 5GB volume guardian: fail closed and never delete live state",()=>{
   it("inventories disk via du and leaves all files untouched by default",()=>{
