@@ -42,3 +42,15 @@ test('rejects symlink and suspicious profile content',()=>{
   assert.equal(r.reclaimedBytes,0);assert.ok(fs.existsSync(profile));
  }finally{fs.rmSync(x.root,{recursive:true,force:true})}
 });
+
+test('owner chown refreshes ctime but safe unused cache still ages by mtime and atime',()=>{
+ const x=fixture();try{
+  const old=new Date(Date.now()-4*86400_000);
+  fs.utimesSync(x.duplicate,old,old);
+  fs.chmodSync(x.duplicate,0o600); // ctime refreshed during Railway chown
+  const r=reclaimBrowserCaches({root:x.root,canonicalBrowser:x.canonical,apply:true,probe:()=>true});
+  assert.equal(r.eligible[0].status,'PRUNED');
+  assert.equal(fs.existsSync(x.duplicate),false);
+  assert.ok(fs.existsSync(x.canonical));
+ }finally{fs.rmSync(x.root,{recursive:true,force:true})}
+});
