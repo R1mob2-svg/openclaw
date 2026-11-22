@@ -3,7 +3,7 @@
  * Railway persistent-volume guard. Node-only, no model credits.
  * Default: READ ONLY. --apply requires NEO_SAFE_RETENTION_APPLY=1.
  *
- * NEVER traverses agents/, sessions/, workspace/, memory/, ledgers, queues,
+ * NEVER deletes from agents/, sessions/, workspace/, memory/, ledgers, queues,
  * receipts, credentials, source repos or Chromium downloads.
  * It only unlinks expired regular files with exact disposable extensions under
  * explicitly named, isolated housekeeping folders.
@@ -82,7 +82,7 @@ export function requireArtifactHeadroom(root, expectedBytes, limits = {}) {
 // has explicitly marked them completed, non-recoverable and externally saved.
 // Age alone is NOT evidence an unpushed source/artifact can be deleted.
 function hasDisposableProof(root, candidate, policy) {
-  if (policy === "logs/rotated") return true;
+  if (policy === "logs/rotated" || policy === "logs") return true;
   const markerPath = candidate + ".disposable.json";
   try {
     const st = fs.lstatSync(markerPath);
