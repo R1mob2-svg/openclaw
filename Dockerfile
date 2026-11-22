@@ -98,6 +98,11 @@ RUN set -eux; \
 
 COPY . .
 
+# Safety gate for automatic NEO persistent-volume retention. The test uses
+# synthetic temporary volumes and never touches Railway's real session volume.
+# No model calls, network, or GitHub Actions.
+RUN node --test scripts/neo-volume-guardian.test.mjs
+
 # Normalize extension paths now so runtime COPY preserves safe modes
 # without adding a second full extensions layer.
 RUN for dir in /app/${OPENCLAW_BUNDLED_PLUGIN_DIR} /app/.agent /app/.agents; do \
