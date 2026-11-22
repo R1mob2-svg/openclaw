@@ -4,7 +4,7 @@ import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 
 const API_VERSION = "2022-11-28";
-const DEFAULT_INTERVAL_MS = 60_000;
+const DEFAULT_INTERVAL_MS = 30 * 60 * 1000; // Founder: no one-minute polling.
 const DEFAULT_EXECUTION_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_NEO_DISPATCH_TIMEOUT_MS = 300_000;
 const MAX_DISPATCH_ATTEMPTS = 3;
@@ -27,7 +27,7 @@ function repos() {
 
 function intervalMs() {
   const raw = Number(env("GEMINX_AGENT_BUS_POLL_MS"));
-  return Number.isFinite(raw) && raw >= 15_000 ? Math.floor(raw) : DEFAULT_INTERVAL_MS;
+  return Number.isFinite(raw) && raw >= DEFAULT_INTERVAL_MS ? Math.floor(raw) : DEFAULT_INTERVAL_MS;
 }
 
 function executionMaxAgeMs() {

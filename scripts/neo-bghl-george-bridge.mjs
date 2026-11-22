@@ -22,7 +22,7 @@ const headers=token=>({Authorization:"Bearer "+token,
  "Content-Type":"application/json","User-Agent":"NEO-BGHL-Technical-Receiver/1.0"});
 const rid=x=>createHash("sha256").update(x).digest("hex");
 const safeDate=x=>new Date(x).toISOString();
-export function parseGeorgeIncidents(text,{now=Date.now(),maxAgeMs=86400000}={}){
+export function parseGeorgeIncidents(text,{now=Date.now(),maxAgeMs=2*60*60*1000}={}){
  const output=[],used=new Set();
  for(const chunk of String(text||"").split(/(?=^### \d{4}-\d{2}-\d{2}T)/gm)){
   const head=/^### ([0-9T:.-]+Z) — BGHL George — ([a-z0-9-]+)\s*$/m.exec(chunk);
@@ -150,15 +150,23 @@ export function createGeorgeIncidentReceiver({
     // silently executes the same external repair twice.
     const id="bghl-neo-"+event.key.slice(0,32);
     atomic(file,{id,status:"CLAIMED",at:now().toISOString(),event});
-    try{
-     const response=await runAgent(event);
-     receipt={id,event,status:response?.status||"BLOCKED",
-      response:String(response?.response||"").slice(0,2800),
-      at:now().toISOString(),ack:false};
-    }catch(e){
+    // Default is zero paid API requests. A recorded incident is durable, but
+    // no background DeepSeek (or other paid model) work is authorised.
+    // Human-approved repair is handled by the existing BGHL ChatGPT warden.
+    if(cfg("NEO_BGHL_BRIDGE_PAID_INFERENCE_ENABLED")!=="true"){
      receipt={id,event,status:"BLOCKED",
-      error:String(e?.message||"NEO_DISPATCH_FAILED").slice(0,110),
-      at:now().toISOString(),ack:false};
+      error:"COST_GUARD_NO_MODEL_CALL",at:now().toISOString(),ack:false};
+    }else{
+     try{
+      const response=await runAgent(event);
+      receipt={id,event,status:response?.status||"BLOCKED",
+       response:String(response?.response||"").slice(0,2800),
+       at:now().toISOString(),ack:false};
+     }catch(e){
+      receipt={id,event,status:"BLOCKED",
+       error:String(e?.message||"NEO_DISPATCH_FAILED").slice(0,110),
+       at:now().toISOString(),ack:false};
+     }
     }
     atomic(file,receipt);
     logger("[bghl-george-bridge] action=neo_received code="+event.code+

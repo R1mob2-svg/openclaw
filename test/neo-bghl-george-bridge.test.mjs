@@ -40,7 +40,7 @@ test("existing NEO ingress executes once and writes a read-back-confirmed CAS re
  };
  try{
   const receiver=createGeorgeIncidentReceiver({root:()=>root,
-   getEnv:n=>n==="NEO_BGHL_BRIDGE_ENABLED"?"true":n==="GH_TOKEN"?"TEST":"",requester:fetcher,
+   getEnv:n=>n==="NEO_BGHL_BRIDGE_ENABLED"?"true":n==="NEO_BGHL_BRIDGE_PAID_INFERENCE_ENABLED"?"true":n==="GH_TOKEN"?"TEST":"",requester:fetcher,
    now:()=>new Date(stamp),sendToNeo:async e=>{dispatch++;assert.equal(e.code,"SCHEDULED_TASK_FAILED");
     return {status:"COMPLETED",response:"FINAL STATUS: COMPLETED receipt_id: test-001"};},
    logger:()=>{}});
@@ -61,4 +61,38 @@ test("missing credential or disabled bridge never invokes NEO",async()=>{
   requester:async()=>{count++;throw Error("unexpected");}});
  assert.equal((await r.sweep()).status,"DISABLED");
  assert.equal(count,0);
+});
+
+test("default zero-spend receiver writes an incident receipt without any AI call",async()=>{
+ const root=mkdtempSync(path.join(tmpdir(),"neo-george-no-cost-"));
+ let doc="# BGHL NEO Bridge — Error Log\n"+event,sha=1,modelCalls=0;
+ const requester=async(url,opts)=>{
+  if(opts.method==="PUT"){
+   const b=JSON.parse(opts.body);
+   doc=Buffer.from(b.content,"base64").toString("utf8");sha++;
+   return Response.json({commit:{sha:"commit-"+sha}});
+  }
+  return Response.json({type:"file",encoding:"base64",sha:"sha-"+sha,size:doc.length,
+   content:Buffer.from(doc).toString("base64")});
+ };
+ try{
+  const receiver=createGeorgeIncidentReceiver({root:()=>root,
+   getEnv:n=>n==="NEO_BGHL_BRIDGE_ENABLED"?"true":n==="GH_TOKEN"?"TEST":"",
+   requester,now:()=>new Date(stamp),
+   sendToNeo:async()=>{modelCalls++;throw Error("paid model must never be called");},
+   logger:()=>{}});
+  const result=await receiver.sweep();
+  assert.equal(result.attempted,1);assert.equal(result.acked,1);
+  assert.equal(modelCalls,0);
+  assert.match(doc,/NEO_TECHNICAL_RECEIPT/);
+  assert.match(doc,/status: BLOCKED/);
+  assert.match(JSON.stringify(readFileSync(path.join(root,"receipts","george-"+key+".json"),"utf8")),
+   /COST_GUARD_NO_MODEL_CALL/);
+ }finally{rmSync(root,{recursive:true,force:true});}
+});
+test("30-minute idle polling is enforced even if an old env requests one minute",async()=>{
+ const source=readFileSync(new URL("../scripts/poll-agent-message-bus.mjs",import.meta.url),"utf8");
+ assert.match(source,/DEFAULT_INTERVAL_MS = 30 \* 60 \* 1000/);
+ assert.match(source,/raw >= DEFAULT_INTERVAL_MS/);
+ assert.doesNotMatch(source,/DEFAULT_INTERVAL_MS = 60_000/);
 });
