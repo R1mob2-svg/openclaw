@@ -302,6 +302,18 @@ function shortReport(report) {
       report.reclaimedBytes === 0),
     policies: report.policies };
 }
+/**
+ * Daily no-model maintenance window, 03:00-03:59 UK local time, including DST.
+ * No new scheduler: existing five-minute watchdog owns the check.
+ */
+export function londonDailyAuditDate(nowMs=Date.now()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London", year: "numeric", month: "2-digit",
+    day: "2-digit", hour: "2-digit", hourCycle: "h23"
+  }).formatToParts(new Date(nowMs));
+  const get = (name) => parts.find(p => p.type === name)?.value;
+  return get("hour") === "03" ? [get("year"), get("month"), get("day")].join("-") : null;
+}
 async function main() {
   const opts = cliArgs();
   if (opts.apply && process.env.NEO_SAFE_RETENTION_APPLY !== "1") {
@@ -325,18 +337,41 @@ async function main() {
     return;
   }
   let pressureScanNumber = 0;
+  let tickNumber = 0;
+  let lastDailyAuditDate = null;
+  let lastCapacityBand = null;
   const tick = () => {
     const result = retentionSweep(opts.root, opts);
     console.log("VOLUME_GUARD " + JSON.stringify(shortReport(result)));
-    // Once on boot and approximately hourly thereafter; no paid model, no
-    // duplicate scheduler, and no extra traversal on every 5-minute tick.
+
+    // The EXISTING five-minute worker owns both hourly pressure scanning and
+    // a UK 03:00 deeper inventory. No cron service or model inference.
+    const hourlyPressureScan = result.earlyPressure && pressureScanNumber++ % 12 === 0;
+    const ukDate = londonDailyAuditDate();
+    const dailyAuditDue = ukDate !== null && ukDate !== lastDailyAuditDate;
+    if (dailyAuditDue) lastDailyAuditDate = ukDate;
     let duplicateBrowserReclaimedBytes = 0;
-    if (result.earlyPressure && pressureScanNumber++ % 12 === 0) {
-      console.log("VOLUME_PRESSURE_SUBTREE_INVENTORY " +
-        JSON.stringify({schema:"safe.volume.subtree-inventory.v1",
-          entries:pressureSubtreeInventory(opts.root)}));
-      // Existing watchdog owns this hourly check. No new cron or paid inference.
-      // Only 48h-stale duplicate browser versions, never ms-playwright or profiles.
+    if (hourlyPressureScan || dailyAuditDue) {
+      const inventory = pressureSubtreeInventory(opts.root);
+      if (hourlyPressureScan) {
+        console.log("VOLUME_PRESSURE_SUBTREE_INVENTORY " +
+          JSON.stringify({schema:"safe.volume.subtree-inventory.v1",entries:inventory}));
+      }
+      if (dailyAuditDue) {
+        // READ ONLY outside the existing narrowly scoped retention policies.
+        // Never infer that a workspace or Git clone is disposable.
+        console.log("NEO_DAILY_STORAGE_AUDIT " + JSON.stringify({
+          schema:"neo.daily-storage-audit.v1",ukDate,
+          usedBytes:result.after?.usedBytes ?? result.before.usedBytes,
+          usedPercent:result.after?.usedPercent ?? result.before.usedPercent,
+          topConsumers:topLevelUsage(opts.root),
+          workspaceInventory:inventory,
+          workspaceDeletionAuthorized:false,
+          modelCalls:0, extraScheduler:false
+        }));
+      }
+      // Conservatively reclaim only verified aged, unused duplicate browsers.
+      // Canonical ms-playwright, profiles, sessions and source are protected.
       try {
         const caches = reclaimBrowserCaches({root:opts.root,apply:opts.apply});
         duplicateBrowserReclaimedBytes = caches.reclaimedBytes;
@@ -346,8 +381,24 @@ async function main() {
           String(error?.code || error?.message || "UNKNOWN").replace(/[^A-Za-z0-9_.:-]/g,"_").slice(0,80));
       }
     }
+    const post = duplicateBrowserReclaimedBytes > 0
+      ? diskSnapshot(opts.root, {capacityBytes:opts.capacityBytes,reserveBytes:opts.reserveBytes})
+      : (result.after ?? result.before);
+    const band = post.usedPercent >= 80 ? "CRITICAL" :
+      (post.usedPercent >= 70 ? "WARNING" : "OK");
+    // Warn at most hourly unless the threshold changes. Never trigger an AI
+    // repair turn merely because a threshold has been crossed.
+    if (band !== lastCapacityBand || (band !== "OK" && tickNumber % 12 === 0)) {
+      console.log("NEO_VOLUME_CAPACITY_LEVEL " + JSON.stringify({
+        schema:"neo.volume-capacity-level.v1",band,
+        usedPercent:post.usedPercent,freeBytes:post.freeBytes,
+        autoPaidInference:false
+      }));
+    }
+    lastCapacityBand = band;
+    tickNumber++;
     if (result.after &&
-        result.after.freeBytes < Math.max(result.after.reserveBytes, EARLY_CLEAN_RESERVE) &&
+        post.freeBytes < Math.max(post.reserveBytes, EARLY_CLEAN_RESERVE) &&
         result.reclaimedBytes === 0 && duplicateBrowserReclaimedBytes === 0) {
       console.warn("VOLUME_GUARD_CAPACITY_ACTION_REQUIRED protected_data_preserved=true no_safe_cleanup_candidates=true");
     }
