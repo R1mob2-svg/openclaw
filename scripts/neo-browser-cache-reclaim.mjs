@@ -37,7 +37,7 @@ function scanVersion(candidate,device,nowMs){
     dirs.push(p);
     for(const n of fs.readdirSync(p))visit(path.join(p,n));
   }else if(st.isFile()){
-    if(st.nlink!==1||BAD_NAMES.test(path.basename(p))||[st.mtimeMs,st.ctimeMs,st.atimeMs].some(t=>t>=nowMs-STALE_MS)){
+    if(st.nlink!==1||BAD_NAMES.test(path.basename(p))||[st.mtimeMs,st.atimeMs].some(t=>t>=nowMs-STALE_MS)){
       valid=false;return;
     }
     entries.push({path:p,ino:st.ino,size:st.size,mtime:st.mtimeMs,ctime:st.ctimeMs,atime:st.atimeMs});
