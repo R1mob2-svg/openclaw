@@ -21,12 +21,38 @@ test("no inference on idle or missing token",async()=>{
 });
 test("dispatch is one exact revision with expected note only",async()=>{
  const dispatched=[];
- const result=await pollFactoryQa({token:"token",onPending:async m=>dispatched.push(m),fetchImpl:fakeFetch()});
+ const result=await pollFactoryQa({token:"token",onPending:async m=>{dispatched.push(m);return true;},fetchImpl:fakeFetch()});
  assert.equal(result.status,"QA_DISPATCH_ATTEMPTED");
  assert.equal(dispatched.length,1);
  assert.equal(dispatched[0].sourceSha,sha);
  assert.match(dispatched[0].messageId,/DA-QA-WM-LTD-20261116-0007-/);
- const skipped=await pollFactoryQa({token:"token",onPending:async m=>dispatched.push(m),fetchImpl:fakeFetch(cp,"wrong-source")});
+ const skipped=await pollFactoryQa({token:"token",onPending:async m=>{dispatched.push(m);return true;},fetchImpl:fakeFetch(cp,"wrong-source")});
  assert.equal(skipped.status,"QA_REQUEST_MISMATCH");
  assert.equal(dispatched.length,1);
+});
+test("an exhausted prior attempt cannot starve the next pending prospect",async()=>{
+ const second={...entry,prospect_id:"WM-LTD-20261116-0012",
+  task_id:"DA-CHATGPT-WM-LTD-20261116-0012-09Z",
+  request_path:"Agent_Inbox/NEO/Messages/2026-11-23T09Z_STM.md"};
+ const visited=[];
+ const result=await pollFactoryQa({token:"token",fetchImpl:fakeFetch({pending_qa:[entry,second]},
+  entry.task_id+"\\n"+second.task_id+"\\n"+sha),onPending:async m=>{
+   visited.push(m.taskId);return m.taskId===second.task_id;
+  }});
+ assert.equal(result.status,"QA_DISPATCH_ATTEMPTED");
+ assert.equal(result.messageId,"DA-QA-"+second.prospect_id+"-"+sha.slice(0,12));
+ assert.deepEqual(visited,[entry.task_id,second.task_id]);
+ assert.equal(result.skipped,1);
+});
+test("the full backlog is visible even after eight older requests",()=>{
+ const items=Array.from({length:10},(_,i)=>({...entry,
+  prospect_id:"WM-LTD-20261116-"+String(i).padStart(4,"0"),
+  task_id:entry.task_id+"-"+i}));
+ assert.equal(selectPendingFactoryQa({pending_qa:items}).length,10);
+});
+test("no successful pickup is claimed if all candidates already have receipts",async()=>{
+ const result=await pollFactoryQa({token:"token",fetchImpl:fakeFetch(),
+  onPending:async()=>false});
+ assert.equal(result.status,"QA_SKIPPED_NO_NEW_DISPATCH");
+ assert.equal(result.skipped,1);
 });

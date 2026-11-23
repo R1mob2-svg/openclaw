@@ -501,9 +501,20 @@ async function sweep() {
             objective: "Run FREE existing Railway NEO Chromium Playwright 12-width QA on this exact published source; require left-edge layout, 200, image decode, functional navigation and email screenshot parity. Save actual ACK and QA_RESULT in existing Brain, not prose PASS. NEVER send customer email."
           }
         };
-        const ingested = ingestIssue("R1mob2-svg/global-agent-brain", issue, envelope);
-        if (ingested.message)
-          await dispatchNeoMessage("R1mob2-svg/global-agent-brain", issue, token, ingested.message);
+        // Idempotency: exhausted attempts and terminal receipts must not starve
+        // later pending QA revisions. No model call occurs on a skipped item.
+        const statePath=dispatchStatePath(qa.messageId);
+        const state=readJsonFile(statePath,{attempts:0});
+        const before=Number(state?.attempts??0);
+        if(existsSync(executionReceiptPath(qa.messageId)) ||
+           before>=MAX_DISPATCH_ATTEMPTS || !env("OPENCLAW_GATEWAY_TOKEN"))
+          return false;
+        const ingested=ingestIssue("R1mob2-svg/global-agent-brain",issue,envelope);
+        if(!ingested.message)return false;
+        const completed=await dispatchNeoMessage("R1mob2-svg/global-agent-brain",issue,token,ingested.message);
+        // A timed-out attempt still counts as today's ONE real dispatch,
+        // but an already-receipted/exhausted job does not.
+        return completed || Number(readJsonFile(statePath,{attempts:0})?.attempts??0)>before;
       }
     });
     if (result.status !== "IDLE_NO_PENDING_QA")
