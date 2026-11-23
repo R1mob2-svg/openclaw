@@ -342,6 +342,22 @@ async function postIssueReceipt(repo, issueNumber, token, message, status, respo
   if (!response.ok) throw new Error(`receipt_comment_http_${response.status}`);
 }
 
+// Zero-inference listener check. The bus starts before the foreground gateway
+// in railway-neo-runtime-start.sh; do not burn a retry or send work until ready.
+async function neoGatewayListening(fetchImpl = fetch) {
+  try {
+    const response = await fetchImpl("http://127.0.0.1:8080/startupz", {
+      method: "GET",
+      signal: AbortSignal.timeout(2500),
+    });
+    // A 404/401 still proves the local HTTP gateway is listening;
+    // /startupz can vary between OpenClaw builds.
+    return response.status >= 200 && response.status < 500;
+  } catch {
+    return false;
+  }
+}
+
 async function dispatchNeoMessage(repo, issue, token, message) {
   if (!shouldDispatchToNeo(message)) return false;
   const receiptFile = executionReceiptPath(message.message_id);
@@ -355,6 +371,11 @@ async function dispatchNeoMessage(repo, issue, token, message) {
   const gatewayToken = env("OPENCLAW_GATEWAY_TOKEN");
   if (!gatewayToken) {
     console.log(`[agent-message-bus] action=dispatch_blocked message_id=${message.message_id} reason=gateway_token_missing`);
+    return false;
+  }
+
+  if (!(await neoGatewayListening())) {
+    console.log(`[agent-message-bus] action=dispatch_deferred message_id=${message.message_id} reason=local_gateway_not_listening attempts_unchanged=${attempts}`);
     return false;
   }
 
@@ -554,6 +575,19 @@ async function guardedSweep() {
   }
 }
 
+// The gateway is started after this poller by Railway's launch script. Wait
+// a bounded period for its listener before the FIRST sweep. Subsequent sweeps
+// are already gated individually before dispatch and preserve retry counts.
+async function waitForGatewayOnBoot(maxWaitMs = 120_000) {
+  const until = Date.now() + maxWaitMs;
+  while (Date.now() < until) {
+    if (await neoGatewayListening()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  return false;
+}
 console.log(`[agent-message-bus] started interval_ms=${intervalMs()} repos=${repos().join(",")}`);
-await guardedSweep();
+const readyAtBoot = await waitForGatewayOnBoot();
+console.log(`[agent-message-bus] gateway_ready_on_boot=${readyAtBoot}`);
+if (readyAtBoot) await guardedSweep();
 setInterval(() => void guardedSweep(), intervalMs());
