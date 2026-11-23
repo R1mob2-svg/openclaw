@@ -44,6 +44,20 @@ test("an exhausted prior attempt cannot starve the next pending prospect",async(
  assert.deepEqual(visited,[entry.task_id,second.task_id]);
  assert.equal(result.skipped,1);
 });
+test("fresh pending QA gets a dispatch slot before repeatedly failing repair",()=>{
+ const failed={...entry,prospect_id:"WM-LTD-20261116-0011",
+  task_id:"DA-CHATGPT-WM-LTD-20261116-0011-08Z",
+  qa_status:"QA_FAIL_REPAIR_PENDING"};
+ const fresh={...entry,prospect_id:"WM-LTD-20261116-0012",
+  task_id:"DA-CHATGPT-WM-LTD-20261116-0012-09Z"};
+ const latest={...entry,prospect_id:"WM-LTD-20261116-0013",
+  task_id:"DA-CHATGPT-WM-LTD-20261116-0013-10Z"};
+ const list=[failed,fresh,latest];
+ const result=selectPendingFactoryQa({pending_qa:list});
+ assert.deepEqual(result.map(x=>x.task_id),
+   [fresh.task_id,latest.task_id,failed.task_id]);
+ assert.equal(list[0].task_id,failed.task_id); // no checkpoint mutation
+});
 test("the full backlog is visible even after eight older requests",()=>{
  const items=Array.from({length:10},(_,i)=>({...entry,
   prospect_id:"WM-LTD-20261116-"+String(i).padStart(4,"0"),
