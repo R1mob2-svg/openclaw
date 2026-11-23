@@ -469,6 +469,22 @@ async function sweep() {
   }
   console.log(`[agent-message-bus] auth_source=${tokenSource}`);
 
+  // Run the zero-model wake detector BEFORE potentially long NEO dispatches.
+  // Otherwise a 15-minute stuck QA can delay an entire missed-hour recovery.
+  // Founder hourly reliability: same 30-minute bus, no extra polling timer.
+  // This deterministic check only creates a recovery issue when the correct
+  // START/END evidence is missing or stale for an eligible UTC hour.
+  try {
+    const watch=await monitorFactoryWake({token});
+    if(!["END_PRESENT","START_PRESENT_END_PENDING","BEFORE_MONITOR_START"].includes(watch.status))
+      console.log("[digital-ambush-factory-watch] status="+watch.status+
+        " hour="+String(watch.hour||"none")+
+        " issue="+String(watch.issueNumber||"none"));
+  } catch(error) {
+    console.log("[digital-ambush-factory-watch] status=ERROR code="+
+      String(error?.message||"UNKNOWN").replace(/[^A-Za-z0-9_.:-]/g,"_").slice(0,120));
+  }
+
   // Reuse the same 60-second sweep for BGHL George's code-only incidents.
   // The first reader uses this same authenticated GitHub identity.
   try {
@@ -546,19 +562,6 @@ async function sweep() {
   } catch (error) {
     console.log("[digital-ambush-qa] status=READ_OR_DISPATCH_BLOCKED code=" +
       String(error?.message || "UNKNOWN").replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0,120));
-  }
-  // Founder hourly reliability: same 30-minute bus, no extra polling timer.
-  // This deterministic check only creates a recovery issue after *both*
-  // immutable factory receipts are missing for the eligible UTC hour.
-  try {
-    const watch=await monitorFactoryWake({token});
-    if(!["END_PRESENT","START_PRESENT_END_PENDING","BEFORE_MONITOR_START"].includes(watch.status))
-      console.log("[digital-ambush-factory-watch] status="+watch.status+
-        " hour="+String(watch.hour||"none")+
-        " issue="+String(watch.issueNumber||"none"));
-  } catch(error) {
-    console.log("[digital-ambush-factory-watch] status=ERROR code="+
-      String(error?.message||"UNKNOWN").replace(/[^A-Za-z0-9_.:-]/g,"_").slice(0,120));
   }
   if (discovered > 0) console.log(`[agent-message-bus] sweep_queued=${discovered}`);
 }
