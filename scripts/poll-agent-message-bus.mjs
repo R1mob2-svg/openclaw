@@ -1,6 +1,7 @@
 import { classifyNeoBusReply } from "./neo-agent-bus-receipt-status.mjs";
 import {createGeorgeIncidentReceiver} from "./neo-bghl-george-bridge.mjs";
 import { pollFactoryQa } from "./neo-da-factory-qa-pickup.mjs";
+import { monitorFactoryWake } from "./neo-da-factory-wake-monitor.mjs";
 import path from "node:path";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 
@@ -524,6 +525,19 @@ async function sweep() {
   } catch (error) {
     console.log("[digital-ambush-qa] status=READ_OR_DISPATCH_BLOCKED code=" +
       String(error?.message || "UNKNOWN").replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0,120));
+  }
+  // Founder hourly reliability: same 30-minute bus, no extra polling timer.
+  // This deterministic check only creates a recovery issue after *both*
+  // immutable factory receipts are missing for the eligible UTC hour.
+  try {
+    const watch=await monitorFactoryWake({token});
+    if(!["END_PRESENT","START_PRESENT_END_PENDING","BEFORE_MONITOR_START"].includes(watch.status))
+      console.log("[digital-ambush-factory-watch] status="+watch.status+
+        " hour="+String(watch.hour||"none")+
+        " issue="+String(watch.issueNumber||"none"));
+  } catch(error) {
+    console.log("[digital-ambush-factory-watch] status=ERROR code="+
+      String(error?.message||"UNKNOWN").replace(/[^A-Za-z0-9_.:-]/g,"_").slice(0,120));
   }
   if (discovered > 0) console.log(`[agent-message-bus] sweep_queued=${discovered}`);
 }
