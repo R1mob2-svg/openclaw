@@ -12,10 +12,15 @@ const SAFE_ID=/^[A-Za-z0-9._-]{1,160}$/;
 export function selectPendingFactoryQa(checkpoint){
  const arr=Array.isArray(checkpoint?.pending_qa)?checkpoint.pending_qa:[];
  const rejected=checkpoint?.founder_priority_override?.source_qa_rejected_blob_sha;
- return arr.filter(x=> x && QA_STATUSES.has(x.qa_status) &&
+ // A failed older QA must never repeatedly occupy the only half-hour dispatch
+ // slot while fresh, exact-SHA sites are waiting. Preserve FIFO within a tier.
+ const candidates=arr.filter(x=> x && QA_STATUSES.has(x.qa_status) &&
    SAFE_ID.test(x.task_id||"") && SAFE_ID.test(x.prospect_id||"") &&
    SHA.test(x.site_blob_sha||"") && PATH.test(x.request_path||"") &&
-   x.site_blob_sha!==rejected); // Do not starve new source revisions behind eight exhausted attempts.
+   x.site_blob_sha!==rejected);
+ return candidates.sort((a,b)=>
+   Number(a.qa_status==="QA_FAIL_REPAIR_PENDING")-
+   Number(b.qa_status==="QA_FAIL_REPAIR_PENDING"));
 }
 async function contentAt(path,token,fetchImpl){
  const url="https://api.github.com/repos/"+REPO+"/contents/"+path.split("/").map(encodeURIComponent).join("/")+"?ref=main";
